@@ -34,6 +34,7 @@ services:
       DATABASE_URL: mysql://${MYSQL_USER:-acadiq_user}:${MYSQL_PASSWORD:-acadiq_pass}@mysql:3306/${MYSQL_DATABASE:-acadiq}
       JWT_SECRET: ${JWT_SECRET:-local_only_change_this_32_char_secret}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1/chat/completions}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}

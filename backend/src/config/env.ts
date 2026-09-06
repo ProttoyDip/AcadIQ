@@ -22,6 +22,10 @@ if (nodeEnv === "production" && jwtSecret.length < 32) {
   throw new Error("JWT_SECRET must contain at least 32 characters in production");
 }
 
+const groqApiKey = process.env.GROQ_API_KEY;
+const effectiveAiKey = process.env.OPENAI_API_KEY || groqApiKey || "";
+const isGroq = Boolean(groqApiKey || effectiveAiKey.startsWith("gsk_"));
+
 export const env = {
   nodeEnv,
   port: positiveInteger("PORT", 5000),
@@ -29,9 +33,10 @@ export const env = {
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
-  openAiApiKey: process.env.OPENAI_API_KEY ?? "",
-  openAiBaseUrl: process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1/chat/completions",
-  openAiModel: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+  groqApiKey: groqApiKey ?? "",
+  openAiApiKey: effectiveAiKey,
+  openAiBaseUrl: process.env.OPENAI_BASE_URL ?? (isGroq ? "https://api.groq.com/openai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions"),
+  openAiModel: process.env.OPENAI_MODEL ?? (isGroq ? "llama-3.3-70b-versatile" : "gpt-4o-mini"),
   aiTimeoutMs: positiveInteger("AI_TIMEOUT_MS", 45_000),
   maxAiInputChars: positiveInteger("MAX_AI_INPUT_CHARS", 80_000),
 };

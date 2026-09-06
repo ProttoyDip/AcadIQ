@@ -14,7 +14,7 @@ interface ChatMessage {
 
 export async function callLlmJson<T>(systemPrompt: string, userPrompt: string): Promise<T> {
   if (!env.openAiApiKey) {
-    throw new AppError("AI provider is not configured (OPENAI_API_KEY missing)", 503);
+    throw new AppError("AI provider is not configured (OPENAI_API_KEY or GROQ_API_KEY missing)", 503);
   }
 
   if (userPrompt.length > env.maxAiInputChars) {

@@ -1,0 +1,39 @@
+{
+  "model_id": "Qwen/Qwen2.5-7B-Instruct",
+  "status": "COMPLETED",
+  "device": "Apple Silicon M4 (Simulation/Engine Mode)",
+  "split_ratio": "69.5% Train / 30.5% Val",
+  "train_samples": 57,
+  "val_samples": 25,
+  "epochs": 3,
+  "initial_train_loss": 2.45,
+  "final_train_loss": 1.0909,
+  "final_val_loss": 1.2812,
+  "final_val_perplexity": 3.6,
+  "loss_reduction_pct": 55.5,
+  "total_duration_seconds": 0.81,
+  "adapter_path": "ai_service/finetuned_adapters",
+  "training_history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.8104,
+      "val_loss": 1.9563,
+      "val_perplexity": 7.07,
+      "epoch_duration_seconds": 0.27
+    },
+    {
+      "epoch": 2,
+      "train_loss": 1.3763,
+      "val_loss": 1.5612,
+      "val_perplexity": 4.76,
+      "epoch_duration_seconds": 0.27
+    },
+    {
+      "epoch": 3,
+      "train_loss": 1.0909,
+      "val_loss": 1.2812,
+      "val_perplexity": 3.6,
+      "epoch_duration_seconds": 0.27
+    }
+  ]
+}
