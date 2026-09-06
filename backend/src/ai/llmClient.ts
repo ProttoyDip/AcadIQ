@@ -12,6 +12,26 @@ export interface ChatMessage {
   content: string;
 }
 
+/**
+ * Backoff between retries. A 429 means the provider is asking us to slow
+ * down — a 250ms retry does nothing useful against a per-minute rate limit
+ * and just burns the retry budget instantly. Honor Retry-After when the
+ * provider sends one (capped so a bad value can't hang the request past the
+ * caller's own timeout); otherwise back off several seconds, growing with
+ * each attempt. Non-429 failures (transient 5xx, network blips) keep the
+ * original fast retry — those really do often clear in milliseconds.
+ */
+function backoffDelayMs(attempt: number, response?: Response): number {
+  if (response?.status === 429) {
+    const retryAfter = Number(response.headers.get("retry-after"));
+    if (Number.isFinite(retryAfter) && retryAfter > 0) {
+      return Math.min(retryAfter * 1000, 15_000);
+    }
+    return 2_000 * (attempt + 1);
+  }
+  return 250 * (attempt + 1);
+}
+
 export async function callLlmChat(messages: ChatMessage[]): Promise<string> {
   if (!env.openAiApiKey) {
     throw new AppError("AI provider is not configured (GROQ_API_KEY or OPENAI_API_KEY missing)", 503);
@@ -41,7 +61,7 @@ export async function callLlmChat(messages: ChatMessage[]): Promise<string> {
         logger.error("llm_copilot_transport_failed", { error: error instanceof Error ? error.message : String(error) });
         break;
       }
-      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt)));
       continue;
     }
 
@@ -63,7 +83,7 @@ export async function callLlmChat(messages: ChatMessage[]): Promise<string> {
       }
     }
 
-    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, response)));
   }
 
   logger.error("llm_copilot_failed", { reason: lastFailure });
@@ -110,7 +130,7 @@ export async function callLlmChatJson<T>(messages: ChatMessage[]): Promise<T> {
         logger.error("llm_copilot_json_transport_failed", { error: error instanceof Error ? error.message : String(error) });
         break;
       }
-      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt)));
       continue;
     }
 
@@ -149,7 +169,7 @@ export async function callLlmChatJson<T>(messages: ChatMessage[]): Promise<T> {
       }
     }
 
-    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, response)));
   }
 
   logger.error("llm_copilot_json_failed", { reason: lastFailure });
@@ -203,7 +223,7 @@ export async function callLlmJson<T>(systemPrompt: string, userPrompt: string): 
         logger.error("llm_transport_failed", { error: error instanceof Error ? error.message : String(error) });
         break;
       }
-      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt)));
       continue;
     }
     if (!response.ok) {
@@ -240,7 +260,7 @@ export async function callLlmJson<T>(systemPrompt: string, userPrompt: string): 
       }
     }
 
-    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, response)));
   }
 
   logger.error("llm_request_failed", { reason: lastFailure });
