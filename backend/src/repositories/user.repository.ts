@@ -26,4 +26,32 @@ export const userRepository = {
       include: { facultyProfile: true },
     });
   },
+
+  createResetToken(data: { userId: number; tokenHash: string; expiresAt: Date }) {
+    return prisma.passwordResetToken.create({
+      data,
+    });
+  },
+
+  findResetToken(tokenHash: string) {
+    return prisma.passwordResetToken.findFirst({
+      where: { tokenHash, used: false },
+      include: { user: true },
+    });
+  },
+
+  markTokenUsed(id: number) {
+    return prisma.passwordResetToken.update({
+      where: { id },
+      data: { used: true },
+    });
+  },
+
+  updatePassword(userId: number, passwordHash: string) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { password: passwordHash },
+    });
+  },
 };
+

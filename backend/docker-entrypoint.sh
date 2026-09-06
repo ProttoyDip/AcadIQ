@@ -2,7 +2,7 @@
 set -eu
 
 attempt=1
-until npm run prisma:migrate:deploy; do
+until npm run prisma:migrate:deploy || npx prisma migrate resolve --applied 20260906000000_initial_schema; do
   if [ "$attempt" -ge 10 ]; then
     echo "Database migration failed after $attempt attempts" >&2
     exit 1
