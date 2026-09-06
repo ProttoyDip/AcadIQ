@@ -13,6 +13,7 @@ import { success } from "../utils/apiResponse";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { questionReviewService } from "../services/questionReview.service";
 import { coMappingService } from "../services/coMapping.service";
+import { dualEvaluationService } from "../services/dualEvaluation.service";
 
 export const analysisController = {
   async analyzeExam(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -62,4 +63,21 @@ export const analysisController = {
       next(err);
     }
   },
+
+  async dualEvaluate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const { question, maxMarks, modelAnswer, studentAnswer } = req.body;
+      const result = await dualEvaluationService.evaluate(String(req.user!.userId), {
+        question,
+        maxMarks: Number(maxMarks) || 10,
+        modelAnswer,
+        studentAnswer,
+      });
+      return success(res, result, 200);
+    } catch (err) {
+      next(err);
+    }
+  },
+
 };
+
