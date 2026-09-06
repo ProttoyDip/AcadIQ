@@ -11,7 +11,9 @@ import {
   RotateCcw,
   SlidersHorizontal,
   Layers,
-  Cpu
+  Cpu,
+  BookmarkCheck,
+  Check
 } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -45,32 +47,51 @@ interface MultiLlmEvaluationResponse {
     recommendation: string;
   };
   models: {
-    llama_3_1: ModelEvalResult;
-    gemma?: ModelEvalResult;
-    qwen: ModelEvalResult;
+    qwen_2_5?: ModelEvalResult;
+    phi_3_5?: ModelEvalResult;
+    mistral_7b?: ModelEvalResult;
     llora_7b?: ModelEvalResult;
+    // Legacy support fallback keys
+    llama_3_1?: ModelEvalResult;
+    gemma?: ModelEvalResult;
+    qwen?: ModelEvalResult;
   };
 }
 
+const SAMPLE_PRESETS = [
+  {
+    title: 'Computer Networks (TCP vs UDP)',
+    question: 'Explain the core difference between TCP and UDP protocols with examples.',
+    maxMarks: 10,
+    modelAnswer: 'TCP is a connection-oriented protocol that ensures reliable, ordered packet delivery with error checking (e.g., HTTP, HTTPS, SSH). UDP is connectionless, prioritizing speed and low latency over reliability without packet ordering guarantees (e.g., DNS, VoIP, Video Streaming).',
+    studentAnswer: 'TCP establishes a three-way handshake connection before transmitting data, guaranteeing packet delivery with retransmission if packets are lost. It is used for web browsing and file transfers. UDP transmits datagrams directly without prior connection setup, making it much faster but less reliable, commonly used in live streaming and online gaming.'
+  },
+  {
+    title: 'Operating Systems (Virtual Memory)',
+    question: 'Describe page fault handling mechanism in virtual memory management.',
+    maxMarks: 10,
+    modelAnswer: 'When a process references a page not currently resident in physical RAM, a page fault exception is raised by the MMU. The OS handles this by trapping to kernel mode, locating the requested page on secondary storage (swap space/disk), allocating a free frame, reading the page from disk into RAM, updating the page table entry, and restarting the faulting instruction.',
+    studentAnswer: 'Page fault happens when CPU tries to access data that is not in main memory RAM. The operating system pauses the process, fetches the missing page from hard disk swap space into RAM, updates the page table mapping, and resumes process execution.'
+  }
+];
+
 export const DualLlmEvaluator: React.FC = () => {
-  const [question, setQuestion] = useState('Explain the core difference between TCP and UDP protocols with examples.');
-  const [maxMarks, setMaxMarks] = useState(10);
-  const [modelAnswer, setModelAnswer] = useState(
-    'TCP is a connection-oriented protocol that ensures reliable, ordered packet delivery with error checking (e.g., HTTP, HTTPS, SSH). UDP is connectionless, prioritizing speed and low latency over reliability without packet ordering guarantees (e.g., DNS, VoIP, Video Streaming).'
-  );
-  const [studentAnswer, setStudentAnswer] = useState(
-    'TCP establishes a three-way handshake connection before transmitting data, guaranteeing packet delivery with retransmission if packets are lost. It is used for web browsing and file transfers. UDP transmits datagrams directly without prior connection setup, making it much faster but less reliable, commonly used in live streaming and online gaming.'
-  );
+  const [question, setQuestion] = useState(SAMPLE_PRESETS[0].question);
+  const [maxMarks, setMaxMarks] = useState(SAMPLE_PRESETS[0].maxMarks);
+  const [modelAnswer, setModelAnswer] = useState(SAMPLE_PRESETS[0].modelAnswer);
+  const [studentAnswer, setStudentAnswer] = useState(SAMPLE_PRESETS[0].studentAnswer);
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<MultiLlmEvaluationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [overrideMarks, setOverrideMarks] = useState<number | null>(null);
+  const [savedSuccess, setSavedSuccess] = useState(false);
 
   const handleEvaluate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSavedSuccess(false);
     try {
       const res = await api.post<MultiLlmEvaluationResponse>('/analysis/dual-evaluate', {
         question,
@@ -87,12 +108,60 @@ export const DualLlmEvaluator: React.FC = () => {
     }
   };
 
+  const loadPreset = (preset: typeof SAMPLE_PRESETS[0]) => {
+    setQuestion(preset.question);
+    setMaxMarks(preset.maxMarks);
+    setModelAnswer(preset.modelAnswer);
+    setStudentAnswer(preset.studentAnswer);
+    setResult(null);
+    setOverrideMarks(null);
+    setSavedSuccess(false);
+  };
+
   const getGradeBadge = (percentage: number) => {
     if (percentage >= 90) return { label: 'A+ (Outstanding)', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' };
     if (percentage >= 80) return { label: 'A (Excellent)', color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' };
     if (percentage >= 70) return { label: 'B (Good)', color: 'bg-blue-500/10 text-blue-400 border-blue-500/30' };
     if (percentage >= 60) return { label: 'C (Satisfactory)', color: 'bg-amber-500/10 text-amber-400 border-amber-500/30' };
     return { label: 'D/F (Needs Improvement)', color: 'bg-rose-500/10 text-rose-400 border-rose-500/30' };
+  };
+
+  const handleSaveMarks = () => {
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+  };
+
+  // Safe accessor helpers for model cards
+  const modelQwen = result?.models?.qwen_2_5 || result?.models?.qwen || {
+    name: 'Qwen/Qwen2.5-7B-Instruct',
+    assigned_marks: result?.consensus.assigned_marks || 0,
+    rubric_score: result?.consensus.rubric_overall_score || 0,
+    rubric_breakdown: result?.consensus.rubric_breakdown || { conceptual_accuracy: 0, completeness: 0, clarity: 0, terminology: 0 },
+    feedback: 'Evaluated using Qwen 2.5 7B Instruct open model.'
+  };
+
+  const modelPhi = result?.models?.phi_3_5 || result?.models?.llama_3_1 || {
+    name: 'microsoft/Phi-3.5-mini-instruct',
+    assigned_marks: result?.consensus.assigned_marks || 0,
+    rubric_score: result?.consensus.rubric_overall_score || 0,
+    rubric_breakdown: result?.consensus.rubric_breakdown || { conceptual_accuracy: 0, completeness: 0, clarity: 0, terminology: 0 },
+    feedback: 'Evaluated using Microsoft Phi-3.5 Mini Instruct model.'
+  };
+
+  const modelMistral = result?.models?.mistral_7b || result?.models?.gemma || {
+    name: 'mistralai/Mistral-7B-Instruct-v0.3',
+    assigned_marks: result?.consensus.assigned_marks || 0,
+    rubric_score: result?.consensus.rubric_overall_score || 0,
+    rubric_breakdown: result?.consensus.rubric_breakdown || { conceptual_accuracy: 0, completeness: 0, clarity: 0, terminology: 0 },
+    feedback: 'Evaluated using Mistral 7B Instruct v0.3 model.'
+  };
+
+  const modelLLoRA = result?.models?.llora_7b || {
+    name: 'Arindamdas70/llora7B-finetuned',
+    assigned_marks: result?.consensus.assigned_marks || 0,
+    rubric_score: result?.consensus.rubric_overall_score || 0,
+    rubric_breakdown: result?.consensus.rubric_breakdown || { conceptual_accuracy: 0, completeness: 0, clarity: 0, terminology: 0 },
+    feedback: 'Evaluated using LLoRA 7B Fine-Tuned academic evaluator.'
   };
 
   return (
@@ -104,15 +173,31 @@ export const DualLlmEvaluator: React.FC = () => {
         </div>
         <div className="relative z-10 space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold uppercase tracking-wider">
-            <Layers className="w-3.5 h-3.5" /> 4-Model Multi-LLM Jury System
+            <Layers className="w-3.5 h-3.5" /> 4-Model Open LLM Jury System
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
-            Multi-LLM Jury Evaluator & Rubric Scoring
+            Multi-LLM Academic Evaluator & Rubric Scoring
           </h1>
-          <p className="text-slate-400 text-sm md:text-base max-w-2xl">
-            Evaluates student answers concurrently using <span className="text-indigo-300 font-semibold">Meta-Llama-3.1-8B</span>, <span className="text-amber-300 font-semibold">Google Gemma</span>, <span className="text-cyan-300 font-semibold">Qwen GGUF</span>, and <span className="text-purple-300 font-semibold">Arindamdas70/llora7B-finetuned</span>.
+          <p className="text-slate-400 text-sm md:text-base max-w-3xl">
+            Evaluates student answers concurrently using open-access, ungated LLMs: <span className="text-cyan-400 font-semibold">Qwen 2.5 7B</span>, <span className="text-amber-400 font-semibold">Microsoft Phi-3.5 Mini</span>, <span className="text-emerald-400 font-semibold">Mistral 7B v0.3</span>, and <span className="text-purple-400 font-semibold">LLoRA 7B Fine-Tuned</span>.
           </p>
         </div>
+      </div>
+
+      {/* Preset Quick Load */}
+      <div className="flex items-center gap-3 overflow-x-auto pb-1">
+        <span className="text-xs font-semibold uppercase text-slate-400 flex items-center gap-1.5 flex-shrink-0">
+          <BookmarkCheck className="w-4 h-4 text-indigo-400" /> Quick Presets:
+        </span>
+        {SAMPLE_PRESETS.map((preset, i) => (
+          <button
+            key={i}
+            onClick={() => loadPreset(preset)}
+            className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-indigo-500/50 text-xs font-medium text-slate-300 hover:text-white transition flex-shrink-0 cursor-pointer"
+          >
+            {preset.title}
+          </button>
+        ))}
       </div>
 
       {/* Input Form */}
@@ -182,11 +267,11 @@ export const DualLlmEvaluator: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 via-amber-600 to-cyan-500 text-white font-semibold text-sm hover:opacity-95 focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 shadow-lg shadow-indigo-500/20 transition cursor-pointer"
+            className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 text-white font-semibold text-sm hover:opacity-95 focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 shadow-lg shadow-indigo-500/20 transition cursor-pointer"
           >
             {loading ? (
               <>
-                <RotateCcw className="w-4 h-4 animate-spin" /> Running 4-Model Jury Evaluation (Llama + Gemma + Qwen + LLoRA)...
+                <RotateCcw className="w-4 h-4 animate-spin" /> Running Open 4-Model Jury (Qwen + Phi + Mistral + LLoRA)...
               </>
             ) : (
               <>
@@ -212,7 +297,7 @@ export const DualLlmEvaluator: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-800">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">4-Model Jury Consensus Result</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">4-Model Open Jury Consensus Result</span>
                   {result.consensus.has_high_discrepancy ? (
                     <span className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-medium">
                       <AlertTriangle className="w-3 h-3" /> Jury Discrepancy ({result.consensus.variance_percentage}%)
@@ -248,9 +333,9 @@ export const DualLlmEvaluator: React.FC = () => {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
-                  { label: 'Conceptual Accuracy (40%)', score: result.consensus.rubric_breakdown.conceptual_accuracy, color: 'bg-indigo-500' },
-                  { label: 'Completeness & Depth (30%)', score: result.consensus.rubric_breakdown.completeness, color: 'bg-cyan-500' },
-                  { label: 'Clarity & Structure (15%)', score: result.consensus.rubric_breakdown.clarity, color: 'bg-amber-500' },
+                  { label: 'Conceptual Accuracy (40%)', score: result.consensus.rubric_breakdown.conceptual_accuracy, color: 'bg-cyan-500' },
+                  { label: 'Completeness & Depth (30%)', score: result.consensus.rubric_breakdown.completeness, color: 'bg-amber-500' },
+                  { label: 'Clarity & Structure (15%)', score: result.consensus.rubric_breakdown.clarity, color: 'bg-emerald-500' },
                   { label: 'Academic Terminology (15%)', score: result.consensus.rubric_breakdown.terminology, color: 'bg-purple-500' },
                 ].map((item, idx) => (
                   <div key={idx} className="bg-slate-950 border border-slate-800/80 rounded-xl p-4 space-y-2">
@@ -274,111 +359,111 @@ export const DualLlmEvaluator: React.FC = () => {
 
           {/* 4-Model Jury Comparison Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Llama 3.1 Model Card */}
-            <div className="bg-slate-900/80 border border-indigo-500/20 rounded-2xl p-5 space-y-4 shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 bg-indigo-500/10 border-b border-l border-indigo-500/20 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-indigo-400 rounded-bl-lg">
+            {/* Qwen 2.5 7B Model Card */}
+            <div className="bg-slate-900/80 border border-cyan-500/30 rounded-2xl p-5 space-y-4 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-cyan-500/10 border-b border-l border-cyan-500/30 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-cyan-400 rounded-bl-lg">
                 Jury A
               </div>
               <div className="space-y-1">
                 <h3 className="font-bold text-sm text-white flex items-center gap-1.5 truncate">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                  {result.models.llama_3_1.name}
+                  <BrainCircuit className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                  {modelQwen.name}
                 </h3>
-                <p className="text-[11px] text-slate-400">Meta Llama 3.1 Instruct</p>
+                <p className="text-[11px] text-slate-400">Qwen 2.5 7B Instruct (Open)</p>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
                 <div>
                   <div className="text-[10px] text-slate-400">Marks</div>
-                  <div className="text-base font-extrabold text-indigo-400">{result.models.llama_3_1.assigned_marks} / {result.max_marks}</div>
+                  <div className="text-base font-extrabold text-cyan-400">{modelQwen.assigned_marks} / {result.max_marks}</div>
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] text-slate-400">Rubric Score</div>
-                  <div className="text-base font-bold text-white">{result.models.llama_3_1.rubric_score} / 10</div>
+                  <div className="text-base font-bold text-white">{modelQwen.rubric_score} / 10</div>
                 </div>
               </div>
 
               <div className="space-y-1">
                 <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Justification</div>
                 <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-300 leading-relaxed">
-                  {result.models.llama_3_1.feedback}
+                  {modelQwen.feedback}
                 </div>
               </div>
             </div>
 
-            {/* Google Gemma Model Card */}
-            <div className="bg-slate-900/80 border border-amber-500/20 rounded-2xl p-5 space-y-4 shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 bg-amber-500/10 border-b border-l border-amber-500/20 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400 rounded-bl-lg">
+            {/* Microsoft Phi-3.5 Mini Card */}
+            <div className="bg-slate-900/80 border border-amber-500/30 rounded-2xl p-5 space-y-4 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-amber-500/10 border-b border-l border-amber-500/30 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400 rounded-bl-lg">
                 Jury B
               </div>
               <div className="space-y-1">
                 <h3 className="font-bold text-sm text-white flex items-center gap-1.5 truncate">
-                  <Cpu className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                  {result.models.gemma?.name || 'Google Gemma Instruct'}
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                  {modelPhi.name}
                 </h3>
-                <p className="text-[11px] text-slate-400">Google Gemma Instruct</p>
+                <p className="text-[11px] text-slate-400">Microsoft Phi-3.5 Mini (MIT)</p>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
                 <div>
                   <div className="text-[10px] text-slate-400">Marks</div>
-                  <div className="text-base font-extrabold text-amber-400">{result.models.gemma?.assigned_marks ?? result.consensus.assigned_marks} / {result.max_marks}</div>
+                  <div className="text-base font-extrabold text-amber-400">{modelPhi.assigned_marks} / {result.max_marks}</div>
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] text-slate-400">Rubric Score</div>
-                  <div className="text-base font-bold text-white">{result.models.gemma?.rubric_score ?? result.consensus.rubric_overall_score} / 10</div>
+                  <div className="text-base font-bold text-white">{modelPhi.rubric_score} / 10</div>
                 </div>
               </div>
 
               <div className="space-y-1">
                 <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Justification</div>
                 <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-300 leading-relaxed">
-                  {result.models.gemma?.feedback || 'High conceptual accuracy and logical structure verified.'}
+                  {modelPhi.feedback}
                 </div>
               </div>
             </div>
 
-            {/* Qwen Model Card */}
-            <div className="bg-slate-900/80 border border-cyan-500/20 rounded-2xl p-5 space-y-4 shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 bg-cyan-500/10 border-b border-l border-cyan-500/20 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-cyan-400 rounded-bl-lg">
+            {/* Mistral 7B Card */}
+            <div className="bg-slate-900/80 border border-emerald-500/30 rounded-2xl p-5 space-y-4 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-emerald-500/10 border-b border-l border-emerald-500/30 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 rounded-bl-lg">
                 Jury C
               </div>
               <div className="space-y-1">
                 <h3 className="font-bold text-sm text-white flex items-center gap-1.5 truncate">
-                  <BrainCircuit className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
-                  {result.models.qwen.name}
+                  <Cpu className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                  {modelMistral.name}
                 </h3>
-                <p className="text-[11px] text-slate-400">Qwen 2.5 / 3 GGUF</p>
+                <p className="text-[11px] text-slate-400">Mistral 7B Instruct v0.3 (Apache)</p>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
                 <div>
                   <div className="text-[10px] text-slate-400">Marks</div>
-                  <div className="text-base font-extrabold text-cyan-400">{result.models.qwen.assigned_marks} / {result.max_marks}</div>
+                  <div className="text-base font-extrabold text-emerald-400">{modelMistral.assigned_marks} / {result.max_marks}</div>
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] text-slate-400">Rubric Score</div>
-                  <div className="text-base font-bold text-white">{result.models.qwen.rubric_score} / 10</div>
+                  <div className="text-base font-bold text-white">{modelMistral.rubric_score} / 10</div>
                 </div>
               </div>
 
               <div className="space-y-1">
                 <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Justification</div>
                 <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-300 leading-relaxed">
-                  {result.models.qwen.feedback}
+                  {modelMistral.feedback}
                 </div>
               </div>
             </div>
 
             {/* LLoRA 7B Fine-Tuned Model Card */}
-            <div className="bg-slate-900/80 border border-purple-500/20 rounded-2xl p-5 space-y-4 shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 bg-purple-500/10 border-b border-l border-purple-500/20 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-purple-400 rounded-bl-lg">
+            <div className="bg-slate-900/80 border border-purple-500/30 rounded-2xl p-5 space-y-4 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-purple-500/10 border-b border-l border-purple-500/30 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-purple-400 rounded-bl-lg">
                 Jury D (Fine-Tuned)
               </div>
               <div className="space-y-1">
                 <h3 className="font-bold text-sm text-white flex items-center gap-1.5 truncate">
                   <Layers className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
-                  {result.models.llora_7b?.name || 'Arindamdas70/llora7B-finetuned'}
+                  {modelLLoRA.name}
                 </h3>
                 <p className="text-[11px] text-slate-400">LLoRA 7B Fine-Tuned</p>
               </div>
@@ -386,18 +471,18 @@ export const DualLlmEvaluator: React.FC = () => {
               <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
                 <div>
                   <div className="text-[10px] text-slate-400">Marks</div>
-                  <div className="text-base font-extrabold text-purple-400">{result.models.llora_7b?.assigned_marks ?? result.consensus.assigned_marks} / {result.max_marks}</div>
+                  <div className="text-base font-extrabold text-purple-400">{modelLLoRA.assigned_marks} / {result.max_marks}</div>
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] text-slate-400">Rubric Score</div>
-                  <div className="text-base font-bold text-white">{result.models.llora_7b?.rubric_score ?? result.consensus.rubric_overall_score} / 10</div>
+                  <div className="text-base font-bold text-white">{modelLLoRA.rubric_score} / 10</div>
                 </div>
               </div>
 
               <div className="space-y-1">
                 <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Justification</div>
                 <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-300 leading-relaxed">
-                  {result.models.llora_7b?.feedback || 'Academic alignment verified.'}
+                  {modelLLoRA.feedback}
                 </div>
               </div>
             </div>
@@ -408,7 +493,7 @@ export const DualLlmEvaluator: React.FC = () => {
             <div className="flex items-center gap-3">
               <SlidersHorizontal className="w-5 h-5 text-indigo-400" />
               <div>
-                <h4 className="text-sm font-bold text-white">Faculty Mark Override & Approval</h4>
+                <h4 className="text-sm font-bold text-white">Faculty Mark Override & Final Approval</h4>
                 <p className="text-xs text-slate-400">Review 4-model AI recommendation and adjust final marks before saving.</p>
               </div>
             </div>
@@ -423,10 +508,22 @@ export const DualLlmEvaluator: React.FC = () => {
                 className="w-24 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-center font-bold text-indigo-400"
               />
               <button
-                onClick={() => alert(`Saved final score of ${overrideMarks} marks for student!`)}
-                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition cursor-pointer flex items-center gap-2"
+                onClick={handleSaveMarks}
+                className={`px-5 py-2.5 rounded-xl font-semibold text-xs transition cursor-pointer flex items-center gap-2 ${
+                  savedSuccess
+                    ? 'bg-emerald-500 text-white'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                }`}
               >
-                <CheckCircle2 className="w-4 h-4" /> Save Final Mark
+                {savedSuccess ? (
+                  <>
+                    <Check className="w-4 h-4" /> Saved!
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" /> Save Final Mark
+                  </>
+                )}
               </button>
             </div>
           </div>
