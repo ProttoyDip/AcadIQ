@@ -94,6 +94,22 @@ services:
     networks:
       - acadiq-network
 
+  ai-service:
+    build:
+      context: ./ai_service
+      dockerfile: Dockerfile
+    container_name: acadiq-ai-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      MODEL_ID: ${MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      PORT: 8000
+    networks:
+      - acadiq-network
+
+
 networks:
   acadiq-network:
     driver: bridge
