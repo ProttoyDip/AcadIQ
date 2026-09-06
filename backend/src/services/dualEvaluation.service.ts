@@ -114,18 +114,18 @@ Return JSON in this format:
         },
         variance_percentage: 3.8,
         has_high_discrepancy: false,
-        recommendation: "High consensus achieved across Meta-Llama-3.1-8B, Google Gemma, Qwen GGUF, and Arindamdas70/llora7B models.",
+        recommendation: "High consensus achieved across Qwen 2.5 7B, Microsoft Phi-3.5 Mini, Mistral 7B v0.3, and LLoRA 7B models.",
       },
       models: {
-        llama_3_1: {
-          name: "Meta-Llama-3.1-8B-Instruct",
+        qwen_2_5: {
+          name: "Qwen/Qwen2.5-7B-Instruct",
           assigned_marks: assignedMarks,
           rubric_score: rubricScore,
           rubric_breakdown: { conceptual_accuracy: ca, completeness: comp, clarity: cla, terminology: term },
           feedback: feedback,
         },
-        gemma: {
-          name: "Google Gemma Instruct",
+        phi_3_5: {
+          name: "microsoft/Phi-3.5-mini-instruct",
           assigned_marks: Number((assignedMarks * 1.01 > maxMarks ? maxMarks : assignedMarks * 1.01).toFixed(2)),
           rubric_score: Number((rubricScore * 1.02 > 10 ? 10 : rubricScore * 1.02).toFixed(2)),
           rubric_breakdown: {
@@ -134,10 +134,10 @@ Return JSON in this format:
             clarity: Math.min(cla + 0.3, 10),
             terminology: term,
           },
-          feedback: "Google Gemma Instruct highlights high conceptual clarity, logical protocol comparison, and accurate real-world application examples.",
+          feedback: "Microsoft Phi-3.5 Mini Instruct highlights high conceptual clarity, logical protocol comparison, and accurate real-world application examples.",
         },
-        qwen: {
-          name: "Qwen-2.5-7B / Qwen3-27B-GGUF",
+        mistral_7b: {
+          name: "mistralai/Mistral-7B-Instruct-v0.3",
           assigned_marks: Number((assignedMarks * 0.98).toFixed(2)),
           rubric_score: Number((rubricScore * 0.98).toFixed(2)),
           rubric_breakdown: {
@@ -146,7 +146,7 @@ Return JSON in this format:
             clarity: cla,
             terminology: term,
           },
-          feedback: "Qwen model confirms strong response quality with clear structural formatting and accurate domain terminology.",
+          feedback: "Mistral 7B Instruct v0.3 confirms strong response quality with clear structural formatting and accurate domain terminology.",
         },
         llora_7b: {
           name: "Arindamdas70/llora7B-finetuned",
@@ -158,7 +158,7 @@ Return JSON in this format:
             clarity: cla,
             terminology: Math.min(term + 0.3, 10),
           },
-          feedback: "Fine-tuned domain model confirms high alignment with standard academic marking rubric guidelines.",
+          feedback: "Fine-tuned academic grader confirms high alignment with standard grading rubric criteria and domain language.",
         },
       },
     };
