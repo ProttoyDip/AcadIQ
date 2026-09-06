@@ -164,7 +164,7 @@ export const reportRepository = {
     return prisma.analysisReport.findMany({
       where: { facultyId },
       orderBy: { createdAt: "desc" },
-      include: { recommendations: true, explanation: true, examQualityScore: true },
+      include: completeReportInclude,
     });
   },
 

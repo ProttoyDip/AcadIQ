@@ -1,12 +1,58 @@
 import { PrismaClient, Role, ChatRole } from "@prisma/client";
 import bcrypt from "bcrypt";
+import { seedDatasets } from "../src/database/seedDatasets";
 
 const prisma = new PrismaClient();
 
-async function main() {
-  console.log("🌱 Starting AcadIQ Copilot database seeding...");
+const defaultCourses = [
+  {
+    courseCode: "CSE 3811",
+    courseName: "Artificial Intelligence",
+    description: "Core computer science course covering AI, search algorithms, and machine learning.",
+  },
+  {
+    courseCode: "CSE 4101",
+    courseName: "Software Engineering",
+    description: "Principles of software architecture, design patterns, and agile methodologies.",
+  },
+  {
+    courseCode: "CSE 3101",
+    courseName: "Database Systems",
+    description: "Core computer science course covering relational databases, SQL, ER modeling, normalization, and transaction processing.",
+  },
+  {
+    courseCode: "CSE 3201",
+    courseName: "Operating Systems",
+    description: "Core computer science course covering process management, CPU scheduling, memory management, file systems, and concurrency.",
+  },
+];
 
-  // 1. Ensure Demo Faculty User exists
+/** Gives every existing faculty user a baseline set of courses to work with. */
+async function seedDefaultCourses() {
+  console.log("Seeding default courses for existing faculty...");
+  const users = await prisma.user.findMany({ where: { role: "FACULTY" } });
+
+  for (const user of users) {
+    for (const course of defaultCourses) {
+      await prisma.course.upsert({
+        where: { facultyId_courseCode: { facultyId: user.id, courseCode: course.courseCode } },
+        update: { courseName: course.courseName, description: course.description },
+        create: {
+          facultyId: user.id,
+          courseCode: course.courseCode,
+          courseName: course.courseName,
+          description: course.description,
+        },
+      });
+    }
+  }
+  console.log(`Seeded default courses for ${users.length} faculty users.`);
+}
+
+/** Seeds one fully-worked Copilot demo: a faculty account, course, exam paper, and a real multi-turn conversation. */
+async function seedCopilotDemo() {
+  console.log("🌱 Seeding AcadIQ Copilot demo data...");
+
   const passwordHash = await bcrypt.hash("AcademicPass@2026", 10);
   const user = await prisma.user.upsert({
     where: { email: "faculty.copilot@acadiq.edu" },
@@ -17,23 +63,14 @@ async function main() {
       password: passwordHash,
       role: Role.FACULTY,
       facultyProfile: {
-        create: {
-          department: "Computer Science & Engineering",
-          designation: "Associate Professor",
-        },
+        create: { department: "Computer Science & Engineering", designation: "Associate Professor" },
       },
     },
   });
   console.log(`👤 User verified: ${user.name} (${user.email})`);
 
-  // 2. Ensure Demo Course exists
   const course = await prisma.course.upsert({
-    where: {
-      facultyId_courseCode: {
-        facultyId: user.id,
-        courseCode: "CSE301",
-      },
-    },
+    where: { facultyId_courseCode: { facultyId: user.id, courseCode: "CSE301" } },
     update: {},
     create: {
       facultyId: user.id,
@@ -44,7 +81,6 @@ async function main() {
   });
   console.log(`📚 Course verified: ${course.courseCode} - ${course.courseName}`);
 
-  // 3. Ensure Demo Course Outcomes exist
   await prisma.courseOutcome.upsert({
     where: { courseId_code: { courseId: course.id, code: "CO1" } },
     update: {},
@@ -65,7 +101,6 @@ async function main() {
   });
   console.log("🎯 Course Outcomes seeded (CO1, CO2)");
 
-  // 4. Ensure Demo Question Paper exists
   let exam = await prisma.questionPaper.findFirst({
     where: { courseId: course.id, year: 2026, semester: "Fall" },
   });
@@ -109,8 +144,6 @@ async function main() {
   }
   console.log(`📄 Exam Paper verified: ${exam.originalName} (ID: ${exam.id})`);
 
-  // 5. Seed Copilot ChatSession
-  // Check if session already exists for this user/course
   let session = await prisma.chatSession.findFirst({
     where: { userId: user.id, courseId: course.id, examId: exam.id },
   });
@@ -122,7 +155,6 @@ async function main() {
         courseId: course.id,
         examId: exam.id,
         title: "Bloom's Taxonomy and CO Coverage Analysis for CSE301 Final",
-        // Seed Copilot Context items
         contexts: {
           create: [
             {
@@ -147,7 +179,6 @@ async function main() {
             },
           ],
         },
-        // Seed Multi-Turn Chat Messages
         messages: {
           create: [
             {
@@ -170,7 +201,12 @@ async function main() {
   } else {
     console.log(`💬 ChatSession already exists (ID: ${session.id})`);
   }
+}
 
+async function main() {
+  await seedDefaultCourses();
+  await seedCopilotDemo();
+  await seedDatasets();
   console.log("✅ Seeding completed successfully!");
 }
 
@@ -182,4 +218,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

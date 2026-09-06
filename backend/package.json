@@ -13,7 +13,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
+    "prisma:seed": "ts-node prisma/seed.ts",
     "seed": "ts-node prisma/seed.ts",
+    "seed:datasets": "ts-node src/database/seedDatasets.ts",
     "lint": "eslint src --ext .ts"
   },
   "prisma": {
