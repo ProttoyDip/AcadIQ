@@ -1,7 +1,7 @@
 import { prisma } from "../database/prismaClient";
 
 export const questionRepository = {
-  createMany(paperId: number, questions: { questionText: string; marks: number; topic?: string; bloomLevel?: string }[]) {
+  createMany(paperId: number, questions: { sequenceNumber: number; questionText: string; marks: number; topic?: string; bloomLevel?: string }[]) {
     return prisma.question.createMany({
       data: questions.map((q) => ({ ...q, paperId })),
     });

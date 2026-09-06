@@ -1,5 +1,4 @@
 import { prisma } from "../database/prismaClient";
-import { Role } from "@prisma/client";
 
 export const userRepository = {
   findByEmail(email: string) {
@@ -10,11 +9,21 @@ export const userRepository = {
     return prisma.user.findUnique({ where: { id }, include: { facultyProfile: true } });
   },
 
-  create(data: { name: string; email: string; password: string; role: Role }) {
-    return prisma.user.create({ data });
-  },
-
-  createFacultyProfile(userId: number, department: string, designation: string) {
-    return prisma.facultyProfile.create({ data: { userId, department, designation } });
+  createWithFacultyProfile(data: {
+    name: string;
+    email: string;
+    password: string;
+    role: "ADMIN" | "FACULTY";
+    department: string;
+    designation: string;
+  }) {
+    const { department, designation, ...user } = data;
+    return prisma.user.create({
+      data: {
+        ...user,
+        facultyProfile: { create: { department, designation } },
+      },
+      include: { facultyProfile: true },
+    });
   },
 };

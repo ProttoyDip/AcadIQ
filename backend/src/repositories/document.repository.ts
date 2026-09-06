@@ -1,12 +1,49 @@
 import { prisma } from "../database/prismaClient";
+import { Prisma } from "@prisma/client";
 
 export const documentRepository = {
-  createSyllabusDocument(courseId: number, filePath: string) {
-    return prisma.syllabusDocument.create({ data: { courseId, filePath } });
+  createSyllabusDocument(data: {
+    courseId: number;
+    filePath: string;
+    originalName: string;
+    mimeType: string;
+    fileSize: number;
+  }) {
+    return prisma.syllabusDocument.create({ data });
   },
 
-  createQuestionPaper(data: { courseId: number; year: number; semester: string; filePath: string }) {
+  createQuestionPaper(data: {
+    courseId: number;
+    year: number;
+    semester: string;
+    filePath: string;
+    originalName: string;
+    mimeType: string;
+    fileSize: number;
+  }) {
     return prisma.questionPaper.create({ data });
+  },
+
+  createQuestionPaperWithQuestions(
+    data: {
+      courseId: number;
+      year: number;
+      semester: string;
+      filePath: string;
+      originalName: string;
+      mimeType: string;
+      fileSize: number;
+    },
+    questions: { sequenceNumber: number; questionText: string; marks: number }[]
+  ) {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const paper = await tx.questionPaper.create({ data });
+      await tx.question.createMany({ data: questions.map((question) => ({ ...question, paperId: paper.id })) });
+      return tx.questionPaper.findUniqueOrThrow({
+        where: { id: paper.id },
+        include: { questions: { orderBy: { sequenceNumber: "asc" } } },
+      });
+    });
   },
 
   findQuestionPaperById(id: number) {
@@ -15,5 +52,9 @@ export const documentRepository = {
 
   findLatestSyllabus(courseId: number) {
     return prisma.syllabusDocument.findFirst({ where: { courseId }, orderBy: { uploadedAt: "desc" } });
+  },
+
+  deleteQuestionPaper(id: number) {
+    return prisma.questionPaper.delete({ where: { id } });
   },
 };

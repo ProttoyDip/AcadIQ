@@ -1,38 +1,47 @@
+import { extractPdfText } from "../ai/pdfTextExtractor";
+import { extractQuestions } from "../ai/questionExtractor";
+import { AppError } from "../middleware/error.middleware";
+import { courseRepository } from "../repositories/course.repository";
 import { documentRepository } from "../repositories/document.repository";
-import { questionRepository } from "../repositories/question.repository";
-import { extractTextFromPdf } from "../utils/pdfParser";
+import { UploadedPdf } from "../validators/document.validator";
 
-/** Splits raw question-paper text into individual questions using a numbering heuristic. */
-function splitIntoQuestions(text: string): { questionText: string; marks: number }[] {
-  const chunks = text.split(/\n\s*(?:Q\.?\s*\d+|Question\s*\d+|\d+[.)])\s*/gi).filter((c) => c.trim().length > 0);
+async function assertCourseOwnership(courseId: number, facultyId: number) {
+  const course = await courseRepository.findOwnedById(courseId, facultyId);
+  if (!course) throw new AppError("Course not found", 404);
+}
 
-  return chunks.map((chunk) => {
-    const marksMatch = chunk.match(/\[(\d+)\s*marks?\]/i) ?? chunk.match(/\((\d+)\)/);
-    return {
-      questionText: chunk.trim(),
-      marks: marksMatch ? Number(marksMatch[1]) : 0,
-    };
-  });
+function fileData(courseId: number, file: UploadedPdf) {
+  return {
+    courseId,
+    filePath: file.path,
+    originalName: file.originalname,
+    mimeType: file.mimetype,
+    fileSize: file.size,
+  };
 }
 
 export const uploadService = {
-  async uploadSyllabus(courseId: number, filePath: string) {
-    return documentRepository.createSyllabusDocument(courseId, filePath);
+  async uploadSyllabus(facultyId: number, courseId: number, file: UploadedPdf) {
+    await assertCourseOwnership(courseId, facultyId);
+    await extractPdfText(file.path);
+    return documentRepository.createSyllabusDocument(fileData(courseId, file));
   },
 
-  async uploadQuestionPaper(courseId: number, year: number, semester: string, filePath: string) {
-    const paper = await documentRepository.createQuestionPaper({ courseId, year, semester, filePath });
-
-    const text = await extractTextFromPdf(filePath);
-    const questions = splitIntoQuestions(text);
-    if (questions.length > 0) {
-      await questionRepository.createMany(paper.id, questions);
+  async uploadQuestionPaper(
+    facultyId: number,
+    courseId: number,
+    year: number,
+    semester: string,
+    file: UploadedPdf
+  ) {
+    await assertCourseOwnership(courseId, facultyId);
+    const questions = extractQuestions(await extractPdfText(file.path));
+    if (questions.length > 500 || questions.some((question) => question.questionText.length > 60_000)) {
+      throw new AppError("The question paper is too large to store safely", 413);
     }
-
-    return paper;
-  },
-
-  extractText(filePath: string) {
-    return extractTextFromPdf(filePath);
+    return documentRepository.createQuestionPaperWithQuestions(
+      { ...fileData(courseId, file), year, semester },
+      questions
+    );
   },
 };

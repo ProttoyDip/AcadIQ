@@ -5,6 +5,7 @@ export interface Course {
   courseName: string;
   description?: string | null;
   createdAt: string;
+  updatedAt?: string;
   syllabusDocuments?: SyllabusDocument[];
   questionPapers?: QuestionPaper[];
 }
@@ -12,7 +13,9 @@ export interface Course {
 export interface SyllabusDocument {
   id: number;
   courseId: number;
-  filePath: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
   uploadedAt: string;
 }
 
@@ -21,13 +24,17 @@ export interface QuestionPaper {
   courseId: number;
   year: number;
   semester: string;
-  filePath: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  uploadedAt: string;
   questions?: Question[];
 }
 
 export interface Question {
   id: number;
   paperId: number;
+  sequenceNumber: number;
   questionText: string;
   marks: number;
   topic?: string | null;
@@ -94,6 +101,8 @@ export type ReportType = "EXAM_QUALITY" | "SYLLABUS_COVERAGE" | "QUESTION_SIMILA
 export interface AnalysisReport {
   id: number;
   facultyId: number;
+  courseId: number | null;
+  questionPaperId: number | null;
   reportType: ReportType;
   resultJson: Record<string, unknown>;
   createdAt: string;

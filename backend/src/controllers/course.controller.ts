@@ -3,6 +3,7 @@ import { courseService } from "../services/course.service";
 import { createCourseSchema } from "../validators/course.validator";
 import { success } from "../utils/apiResponse";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
+import { parsePositiveId } from "../utils/parseId";
 
 export const courseController = {
   async list(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -16,7 +17,7 @@ export const courseController = {
 
   async getById(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const course = await courseService.getById(Number(req.params.id), req.user!.userId);
+      const course = await courseService.getById(parsePositiveId(req.params.id), req.user!.userId);
       return success(res, course);
     } catch (err) {
       next(err);

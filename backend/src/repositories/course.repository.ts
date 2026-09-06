@@ -8,8 +8,29 @@ export const courseRepository = {
   findById(id: number) {
     return prisma.course.findUnique({
       where: { id },
-      include: { syllabusDocuments: true, questionPapers: { include: { questions: true } } },
+      include: {
+        syllabusDocuments: {
+          select: { id: true, courseId: true, originalName: true, mimeType: true, fileSize: true, uploadedAt: true },
+        },
+        questionPapers: {
+          select: {
+            id: true,
+            courseId: true,
+            year: true,
+            semester: true,
+            originalName: true,
+            mimeType: true,
+            fileSize: true,
+            uploadedAt: true,
+            questions: true,
+          },
+        },
+      },
     });
+  },
+
+  findOwnedById(id: number, facultyId: number) {
+    return prisma.course.findFirst({ where: { id, facultyId } });
   },
 
   create(data: { facultyId: number; courseCode: string; courseName: string; description?: string }) {

@@ -1,6 +1,14 @@
-/* Minimal structured logger; swap for pino/winston in production. */
+type LogMeta = Record<string, unknown>;
+
+function write(level: "info" | "warn" | "error", message: string, meta: LogMeta = {}) {
+  const entry = JSON.stringify({ timestamp: new Date().toISOString(), level, message, ...meta });
+  if (level === "error") console.error(entry);
+  else if (level === "warn") console.warn(entry);
+  else console.log(entry);
+}
+
 export const logger = {
-  info: (message: string, meta?: unknown) => console.log(`[INFO] ${message}`, meta ?? ""),
-  error: (message: string, meta?: unknown) => console.error(`[ERROR] ${message}`, meta ?? ""),
-  warn: (message: string, meta?: unknown) => console.warn(`[WARN] ${message}`, meta ?? ""),
+  info: (message: string, meta?: LogMeta) => write("info", message, meta),
+  warn: (message: string, meta?: LogMeta) => write("warn", message, meta),
+  error: (message: string, meta?: LogMeta) => write("error", message, meta),
 };

@@ -23,7 +23,25 @@ api.interceptors.response.use(
   }
 );
 
+/**
+ * Extracts a human-readable message from an API error. Falls back to the
+ * first Zod field error when the backend returns a 422 validation failure
+ * (`error.details.fieldErrors`), since "Request validation failed" alone
+ * isn't actionable for the person filling out the form.
+ */
 export function apiErrorMessage(error: unknown, fallback = "Something went wrong"): string {
   const err = error as any;
-  return err?.response?.data?.error?.message ?? fallback;
+
+  if (!err?.response) {
+    return "Could not reach the server. Check your connection and try again.";
+  }
+
+  const apiError = err.response.data?.error;
+  const fieldErrors = apiError?.details?.fieldErrors as Record<string, string[]> | undefined;
+  if (fieldErrors) {
+    const firstField = Object.keys(fieldErrors).find((key) => fieldErrors[key]?.length);
+    if (firstField) return fieldErrors[firstField][0];
+  }
+
+  return apiError?.message ?? fallback;
 }

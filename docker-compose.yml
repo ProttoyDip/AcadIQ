@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   mysql:
     image: mysql:8.0
@@ -14,7 +12,6 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./database/init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root_pass}"]
       interval: 10s
@@ -35,13 +32,23 @@ services:
       NODE_ENV: production
       PORT: 5000
       DATABASE_URL: mysql://${MYSQL_USER:-acadiq_user}:${MYSQL_PASSWORD:-acadiq_pass}@mysql:3306/${MYSQL_DATABASE:-acadiq}
-      JWT_SECRET: ${JWT_SECRET:-change_this_secret}
+      JWT_SECRET: ${JWT_SECRET:-local_only_change_this_32_char_secret}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1/chat/completions}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-45000}
+      MAX_AI_INPUT_CHARS: ${MAX_AI_INPUT_CHARS:-80000}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
     depends_on:
       mysql:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     volumes:
       - backend_uploads:/app/uploads
     networks:
@@ -58,7 +65,8 @@ services:
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:5000/api}
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - acadiq-network
 

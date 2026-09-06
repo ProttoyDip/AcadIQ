@@ -6,8 +6,7 @@ AcadIQ uses **MySQL 8** running in Docker, managed with **Prisma ORM** from the 
 
 The schema is defined once, as code, in [`backend/prisma/schema.prisma`](../backend/prisma/schema.prisma). Prisma generates and applies versioned migrations from that file — that's the single source of truth, so this folder does not duplicate table definitions.
 
-- `init/` is mounted into the MySQL container at `/docker-entrypoint-initdb.d`. It runs once, on a first-ever container start, before Prisma migrations. Use it only for things Prisma can't express (e.g., seeding a non-schema default like a timezone or charset tweak).
-- Actual tables are created via `npm run prisma:migrate` (dev) or `npm run prisma:migrate:deploy` (CI/production) inside `backend/`.
+- Actual tables are created via `npm run prisma:migrate` (dev) or `npm run prisma:migrate:deploy` (CI/production) inside `backend/`. The backend container applies committed migrations before starting the API.
 
 ## Tables
 
