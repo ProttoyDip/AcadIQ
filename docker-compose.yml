@@ -40,6 +40,7 @@ services:
       AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-45000}
       MAX_AI_INPUT_CHARS: ${MAX_AI_INPUT_CHARS:-80000}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      AI_SERVICE_URL: ${AI_SERVICE_URL:-http://ai-service:8000}
       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}

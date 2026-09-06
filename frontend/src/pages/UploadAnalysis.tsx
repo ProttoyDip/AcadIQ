@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Sparkles } from "lucide-react";
-import { useCourses } from "../hooks/useCourses";
+import { Plus, Sparkles } from "lucide-react";
+import { useCourses, useCreateCourse } from "../hooks/useCourses";
 import { useUploadSyllabus, useUploadQuestionPaper } from "../hooks/useUpload";
 import { useAnalyzeExam } from "../hooks/useAnalysis";
 import { apiErrorMessage } from "../services/api";
@@ -14,9 +14,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import Dropzone from "../components/upload/Dropzone";
 import FilePreviewCard from "../components/upload/FilePreviewCard";
 import ProcessingAnimation from "../components/upload/ProcessingAnimation";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogTrigger,
+  DialogClose,
+} from "../components/ui/dialog";
 
 export default function UploadAnalysis() {
   const { data: courses } = useCourses();
+  const createCourse = useCreateCourse();
   const uploadSyllabus = useUploadSyllabus();
   const uploadQuestionPaper = useUploadQuestionPaper();
   const analyzeExam = useAnalyzeExam();
@@ -32,7 +42,24 @@ export default function UploadAnalysis() {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [courseDialogOpen, setCourseDialogOpen] = useState(false);
+  const [newCourseForm, setNewCourseForm] = useState({ courseCode: "", courseName: "", description: "" });
+  const [newCourseError, setNewCourseError] = useState<string | null>(null);
+
   const canUpload = !!courseId;
+
+  async function handleCreateCourse(e: FormEvent) {
+    e.preventDefault();
+    setNewCourseError(null);
+    try {
+      const created = await createCourse.mutateAsync(newCourseForm);
+      setCourseId(String(created.id));
+      setNewCourseForm({ courseCode: "", courseName: "", description: "" });
+      setCourseDialogOpen(false);
+    } catch (err) {
+      setNewCourseError(apiErrorMessage(err, "Could not create course"));
+    }
+  }
 
   async function handleSyllabusFile(file: File) {
     setSyllabusFile(file);
@@ -80,22 +107,88 @@ export default function UploadAnalysis() {
       />
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-body font-semibold">1. Select course & paper details</CardTitle>
+          <Dialog open={courseDialogOpen} onOpenChange={setCourseDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                <Plus className="h-3.5 w-3.5" /> Add New Course
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add a new course</DialogTitle>
+                <DialogDescription>
+                  Create a new course to group your syllabus and question papers for AI analysis.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleCreateCourse} className="flex flex-col gap-4">
+                {newCourseError && (
+                  <div className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-small text-error">
+                    {newCourseError}
+                  </div>
+                )}
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="newCourseCode">Course code</Label>
+                  <Input
+                    id="newCourseCode"
+                    placeholder="CSE 3811"
+                    required
+                    value={newCourseForm.courseCode}
+                    onChange={(e) => setNewCourseForm({ ...newCourseForm, courseCode: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="newCourseName">Course name</Label>
+                  <Input
+                    id="newCourseName"
+                    placeholder="Artificial Intelligence"
+                    required
+                    value={newCourseForm.courseName}
+                    onChange={(e) => setNewCourseForm({ ...newCourseForm, courseName: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="newCourseDescription">Description (optional)</Label>
+                  <Input
+                    id="newCourseDescription"
+                    value={newCourseForm.description}
+                    onChange={(e) => setNewCourseForm({ ...newCourseForm, description: e.target.value })}
+                  />
+                </div>
+                <div className="mt-2 flex justify-end gap-2">
+                  <DialogClose asChild>
+                    <Button type="button" variant="outline">
+                      Cancel
+                    </Button>
+                  </DialogClose>
+                  <Button type="submit" disabled={createCourse.isPending}>
+                    {createCourse.isPending ? "Adding..." : "Add course"}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="flex flex-col gap-1.5">
             <Label>Course</Label>
             <Select value={courseId} onValueChange={setCourseId}>
               <SelectTrigger>
-                <SelectValue placeholder="Select a course" />
+                <SelectValue placeholder={courses?.length === 0 ? "No courses - Add one first" : "Select a course"} />
               </SelectTrigger>
               <SelectContent>
-                {courses?.map((c) => (
-                  <SelectItem key={c.id} value={String(c.id)}>
-                    {c.courseCode} — {c.courseName}
-                  </SelectItem>
-                ))}
+                {courses && courses.length > 0 ? (
+                  courses.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.courseCode} — {c.courseName}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="p-2 text-center text-xs text-muted-foreground">
+                    No courses available. Click "+ Add New Course" above.
+                  </div>
+                )}
               </SelectContent>
             </Select>
           </div>
