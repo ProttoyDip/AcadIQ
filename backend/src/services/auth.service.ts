@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { userRepository } from "../repositories/user.repository";
+import { courseRepository } from "../repositories/course.repository";
 import { hashPassword, comparePassword } from "../utils/hash";
 import { signToken } from "../utils/jwt";
 import { sendPasswordResetEmail } from "../utils/mailer";
@@ -24,6 +25,23 @@ export const authService = {
       department: input.department,
       designation: input.designation,
     });
+
+    try {
+      await courseRepository.create({
+        facultyId: user.id,
+        courseCode: "CSE 3811",
+        courseName: "Artificial Intelligence",
+        description: "Core computer science course covering AI, search algorithms, and machine learning.",
+      });
+      await courseRepository.create({
+        facultyId: user.id,
+        courseCode: "CSE 4101",
+        courseName: "Software Engineering",
+        description: "Principles of software architecture, design patterns, and agile methodologies.",
+      });
+    } catch (err) {
+      // Ignore if default courses cannot be seeded
+    }
 
     const token = signToken({ userId: user.id, role: user.role });
     return { token, user: { id: user.id, name: user.name, email: user.email, role: user.role } };

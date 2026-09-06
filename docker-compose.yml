@@ -40,6 +40,7 @@ services:
       AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-45000}
       MAX_AI_INPUT_CHARS: ${MAX_AI_INPUT_CHARS:-80000}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      AI_SERVICE_URL: ${AI_SERVICE_URL:-http://ai-service:8000}
       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}
@@ -93,6 +94,22 @@ services:
       - mysql
     networks:
       - acadiq-network
+
+  ai-service:
+    build:
+      context: ./ai_service
+      dockerfile: Dockerfile
+    container_name: acadiq-ai-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      MODEL_ID: ${MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      PORT: 8000
+    networks:
+      - acadiq-network
+
 
 networks:
   acadiq-network:
