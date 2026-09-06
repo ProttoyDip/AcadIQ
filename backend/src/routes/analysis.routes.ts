@@ -10,5 +10,7 @@ router.post("/syllabus", analysisController.analyzeSyllabus);
 router.post("/similarity", analysisController.analyzeSimilarity);
 router.post("/question-review", analysisController.reviewQuestions);
 router.post("/co-mapping", analysisController.mapCourseOutcomes);
+router.post("/dual-evaluate", analysisController.dualEvaluate);
 
 export default router;
+
