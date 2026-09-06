@@ -159,11 +159,12 @@ Full request/response reference: [`docs/API.md`](docs/API.md).
 | `POST` | `/api/auth/register` | Create a faculty/admin account |
 | `POST` | `/api/auth/login` | Authenticate, receive JWT |
 | `GET` / `POST` | `/api/courses` | List / create courses |
-| `POST` | `/api/upload/syllabus` | Upload a syllabus PDF |
-| `POST` | `/api/upload/question-paper` | Upload & auto-parse a question paper |
-| `POST` | `/api/analyze/exam` | Run the Exam Quality Analyzer |
-| `POST` | `/api/analyze/syllabus` | Run the Syllabus Coverage Analyzer |
-| `POST` | `/api/analyze/similarity` | Run the Question Similarity Detector |
+| `POST` | `/api/documents/upload` | Upload a syllabus or question-paper PDF |
+| `POST` | `/api/analysis/exam` | Run the Exam Quality Analyzer |
+| `POST` | `/api/analysis/question-review` | Review question clarity and cognitive quality |
+| `POST` | `/api/analysis/co-mapping` | Map questions to course outcomes |
+| `POST` | `/api/analysis/syllabus` | Run the Syllabus Coverage Analyzer |
+| `POST` | `/api/analysis/similarity` | Run the Question Similarity Detector |
 | `GET` | `/api/reports/:id` | Fetch a stored analysis report |
 
 ## AI Workflow

@@ -1,8 +1,9 @@
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
-import { GraduationCap, Plus, FileText, ClipboardList } from "lucide-react";
+import { GraduationCap, Plus, UploadCloud } from "lucide-react";
 import { useCourses, useCreateCourse } from "../hooks/useCourses";
 import { apiErrorMessage } from "../services/api";
+import { formatDate } from "../lib/format";
 import PageHeader from "../components/layout/PageHeader";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -130,16 +131,9 @@ export default function Courses() {
               <CardContent className="flex flex-1 flex-col justify-between gap-4">
                 <p className="text-small text-muted-foreground">{course.description || "No description provided."}</p>
                 <div className="flex items-center justify-between border-t border-border pt-3">
-                  <div className="flex gap-4 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <FileText className="h-3.5 w-3.5" /> {course.syllabusDocuments?.length ?? 0} syllabus
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <ClipboardList className="h-3.5 w-3.5" /> {course.questionPapers?.length ?? 0} papers
-                    </span>
-                  </div>
-                  <Link to="/upload" className="text-small font-medium text-primary-700 hover:underline">
-                    Upload
+                  <span className="text-xs text-muted-foreground">Added {formatDate(course.createdAt)}</span>
+                  <Link to="/upload" className="flex items-center gap-1 text-small font-medium text-primary-700 hover:underline">
+                    <UploadCloud className="h-3.5 w-3.5" /> Upload documents
                   </Link>
                 </div>
               </CardContent>

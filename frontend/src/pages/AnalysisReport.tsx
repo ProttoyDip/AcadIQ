@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import {
   BookOpenCheck,
   Scale,
@@ -12,6 +12,7 @@ import { useReport, useReports } from "../hooks/useReports";
 import PageHeader from "../components/layout/PageHeader";
 import { LoadingState } from "../components/ui/loading-state";
 import { EmptyState } from "../components/ui/empty-state";
+import { Button } from "../components/ui/button";
 import ScoreHero from "../components/reports/ScoreHero";
 import ExamReportHero from "../components/reports/ExamReportHero";
 import ReportSection from "../components/reports/ReportSection";
@@ -27,21 +28,26 @@ import { Progress } from "../components/ui/progress";
 import { Badge } from "../components/ui/badge";
 import { formatDateTime, reportTypeLabel, bloomLabel } from "../lib/format";
 import { ExamQualityResult, QuestionSimilarityResult, SyllabusCoverageResult } from "../types";
-import { DEMO_SIMILARITY } from "../lib/demoData";
 
 export default function AnalysisReport() {
   const { id } = useParams<{ id: string }>();
-  const { data: report, isLoading } = useReport(id ? Number(id) : null);
+  const { data: report, isLoading, isError } = useReport(id ? Number(id) : null);
   const { data: allReports } = useReports();
 
+  // A separate Question Similarity report for the same course, if the faculty
+  // member has already run one — surfaced inline so the exam report reads as
+  // one complete assessment instead of sending them to hunt for it.
   const similarity = useMemo(() => {
-    const match = (allReports ?? []).find((r) => r.reportType === "QUESTION_SIMILARITY");
-    return match ? { result: match.resultJson as unknown as QuestionSimilarityResult, isDemo: false } : { result: DEMO_SIMILARITY, isDemo: true };
-  }, [allReports]);
+    if (!report?.courseId) return undefined;
+    const match = (allReports ?? []).find(
+      (r) => r.reportType === "QUESTION_SIMILARITY" && r.courseId === report.courseId
+    );
+    return match?.resultJson as unknown as QuestionSimilarityResult | undefined;
+  }, [allReports, report?.courseId]);
 
   if (isLoading) return <LoadingState label="Loading report..." />;
 
-  if (!report) {
+  if (isError || !report) {
     return (
       <EmptyState
         icon={BookOpenCheck}
@@ -60,11 +66,7 @@ export default function AnalysisReport() {
       />
 
       {report.reportType === "EXAM_QUALITY" && (
-        <ExamQualityReport
-          result={report.resultJson as unknown as ExamQualityResult}
-          similarity={similarity.result}
-          similarityIsDemo={similarity.isDemo}
-        />
+        <ExamQualityReport result={report.resultJson as unknown as ExamQualityResult} similarity={similarity} />
       )}
       {report.reportType === "SYLLABUS_COVERAGE" && (
         <SyllabusCoverageReport result={report.resultJson as unknown as SyllabusCoverageResult} />
@@ -88,18 +90,16 @@ const SECTIONS = [
 function ExamQualityReport({
   result,
   similarity,
-  similarityIsDemo,
 }: {
   result: ExamQualityResult;
-  similarity: QuestionSimilarityResult;
-  similarityIsDemo: boolean;
+  similarity?: QuestionSimilarityResult;
 }) {
   const totalQuestions = result.bloomDistribution.reduce((sum, b) => sum + b.questionCount, 0);
   const totalMarks = result.marksDistribution.reduce((sum, m) => sum + m.marks, 0);
   const topicsAssessed = result.topicCoverage.length;
   const highPriorityFlags =
     result.recommendations.filter((r) => r.priority === "HIGH").length +
-    similarity.matches.filter((m) => m.similarityPercentage >= 75).length;
+    (similarity?.matches.filter((m) => m.similarityPercentage >= 75).length ?? 0);
 
   const coveredCount = result.topicCoverage.filter((t) => t.coveredInExam).length;
   const coveragePct = topicsAssessed > 0 ? Math.round((coveredCount / topicsAssessed) * 100) : 0;
@@ -181,26 +181,41 @@ function ExamQualityReport({
           title="Question similarity detection"
           explanation="Questions checked against a previous paper for duplication, conceptual overlap, and repeated patterns."
         >
-          {similarityIsDemo && (
-            <Badge variant="outline" className="mb-4 border-primary-200 bg-primary-50 text-primary-700">
-              Preview — run a similarity check for this course to replace with real matches
-            </Badge>
+          {similarity ? (
+            <>
+              <div className="mb-5 flex items-center gap-3">
+                <Progress
+                  value={100 - similarity.overallDuplicationPercentage}
+                  tone={similarity.overallDuplicationPercentage <= 20 ? "success" : similarity.overallDuplicationPercentage <= 40 ? "warning" : "error"}
+                  className="h-2.5"
+                />
+                <span className="w-36 shrink-0 text-right text-small font-semibold text-foreground">
+                  {similarity.overallDuplicationPercentage}% duplication
+                </span>
+              </div>
+              <SimilarityMatchTable matches={similarity.matches} />
+              <div className="mt-4 flex items-start gap-2.5 rounded-md bg-primary-50/60 p-3">
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary-700" />
+                <p className="text-small text-foreground">{similarity.recommendation}</p>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border bg-muted/40 px-6 py-10 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50">
+                <GitCompareArrows className="h-6 w-6 text-primary-700" strokeWidth={1.75} />
+              </div>
+              <div className="max-w-sm">
+                <p className="text-body font-semibold text-foreground">No similarity check run for this course yet</p>
+                <p className="mt-1 text-small text-muted-foreground">
+                  Compare this paper against a previous semester's exam from Question Memory to detect duplicate or
+                  repeated questions.
+                </p>
+              </div>
+              <Button asChild size="sm" className="mt-1">
+                <Link to="/question-memory">Go to Question Memory</Link>
+              </Button>
+            </div>
           )}
-          <div className="mb-5 flex items-center gap-3">
-            <Progress
-              value={100 - similarity.overallDuplicationPercentage}
-              tone={similarity.overallDuplicationPercentage <= 20 ? "success" : similarity.overallDuplicationPercentage <= 40 ? "warning" : "error"}
-              className="h-2.5"
-            />
-            <span className="w-36 shrink-0 text-right text-small font-semibold text-foreground">
-              {similarity.overallDuplicationPercentage}% duplication
-            </span>
-          </div>
-          <SimilarityMatchTable matches={similarity.matches} />
-          <div className="mt-4 flex items-start gap-2.5 rounded-md bg-primary-50/60 p-3">
-            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary-700" />
-            <p className="text-small text-foreground">{similarity.recommendation}</p>
-          </div>
         </ReportSection>
       </div>
 

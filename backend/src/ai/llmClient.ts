@@ -12,12 +12,13 @@ interface ChatMessage {
   content: string;
 }
 
-const API_URL = process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1/chat/completions";
-const MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
-
 export async function callLlmJson<T>(systemPrompt: string, userPrompt: string): Promise<T> {
   if (!env.openAiApiKey) {
     throw new AppError("AI provider is not configured (OPENAI_API_KEY missing)", 503);
+  }
+
+  if (userPrompt.length > env.maxAiInputChars) {
+    throw new AppError("Document content is too large for analysis", 413, { maxCharacters: env.maxAiInputChars });
   }
 
   const messages: ChatMessage[] = [
@@ -25,27 +26,46 @@ export async function callLlmJson<T>(systemPrompt: string, userPrompt: string): 
     { role: "user", content: userPrompt },
   ];
 
-  const response = await fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${env.openAiApiKey}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages,
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-    }),
-  });
+  let response: Response | undefined;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      response = await fetch(env.openAiBaseUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${env.openAiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: env.openAiModel,
+          messages,
+          temperature: 0.2,
+          response_format: { type: "json_object" },
+        }),
+        signal: AbortSignal.timeout(env.aiTimeoutMs),
+      });
+    } catch (error) {
+      if (attempt === 2) {
+        logger.error("llm_transport_failed", { error: error instanceof Error ? error.message : String(error) });
+        throw new AppError("AI provider is unavailable", 502);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      continue;
+    }
+    if (response.ok || (response.status < 500 && response.status !== 429)) break;
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+  }
 
-  if (!response.ok) {
-    const text = await response.text();
-    logger.error("LLM request failed", text);
+  if (!response || !response.ok) {
+    logger.error("llm_request_failed", { statusCode: response?.status });
     throw new AppError("AI analysis request failed", 502);
   }
 
-  const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+  let body: { choices?: { message?: { content?: string } }[] };
+  try {
+    body = (await response.json()) as typeof body;
+  } catch {
+    throw new AppError("AI provider returned an unreadable response", 502);
+  }
   const content = body?.choices?.[0]?.message?.content;
 
   if (!content) {

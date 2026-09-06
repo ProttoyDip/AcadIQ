@@ -2,9 +2,8 @@ import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { LogIn } from "lucide-react";
-import { authService } from "../services/authService";
+import { useLogin } from "../hooks/useAuthMutations";
 import { apiErrorMessage } from "../services/api";
-import { useAuth } from "../hooks/useAuth";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -12,23 +11,16 @@ import { Label } from "../components/ui/label";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const { setAuth } = useAuth();
+  const login = useLogin();
   const navigate = useNavigate();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setError(null);
-    setLoading(true);
     try {
-      const { token, user } = await authService.login({ email, password });
-      setAuth(token, user);
+      await login.mutateAsync({ email, password });
       navigate("/dashboard");
-    } catch (err) {
-      setError(apiErrorMessage(err, "Login failed"));
-    } finally {
-      setLoading(false);
+    } catch {
+      // surfaced via login.error below
     }
   }
 
@@ -38,9 +30,9 @@ export default function Login() {
       <p className="mt-1 text-small text-muted-foreground">Sign in to your AcadIQ faculty account.</p>
 
       <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4">
-        {error && (
+        {login.isError && (
           <div className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-small text-error">
-            {error}
+            {apiErrorMessage(login.error, "Login failed")}
           </div>
         )}
 
@@ -68,9 +60,9 @@ export default function Login() {
           />
         </div>
 
-        <Button type="submit" disabled={loading} className="mt-2 w-full">
+        <Button type="submit" disabled={login.isPending} className="mt-2 w-full">
           <LogIn className="h-4 w-4" />
-          {loading ? "Signing in..." : "Sign in"}
+          {login.isPending ? "Signing in..." : "Sign in"}
         </Button>
 
         <p className="text-center text-small text-muted-foreground">

@@ -52,3 +52,30 @@ export interface QuestionSimilarityResult {
   overallDuplicationPercentage: number;
   recommendation: string;
 }
+
+export interface QuestionReviewResult {
+  qualityScore: number;
+  questions: Array<{
+    questionId: number;
+    clarityScore: number;
+    bloomLevel: BloomLevel;
+    issues: string[];
+    suggestedRewrite?: string;
+  }>;
+  issues: Array<{ severity: "LOW" | "MEDIUM" | "HIGH"; message: string; questionId?: number }>;
+  recommendations: Array<{ message: string; priority: "LOW" | "MEDIUM" | "HIGH" }>;
+}
+
+export interface CoMappingResult {
+  qualityScore: number;
+  coverage: Record<string, number>;
+  mappings: Array<{
+    questionId: number;
+    courseOutcome: string;
+    strength: "WEAK" | "MODERATE" | "STRONG";
+    rationale: string;
+  }>;
+  unmappedQuestionIds: number[];
+  issues: Array<{ severity: "LOW" | "MEDIUM" | "HIGH"; message: string }>;
+  recommendations: Array<{ message: string; priority: "LOW" | "MEDIUM" | "HIGH" }>;
+}

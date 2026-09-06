@@ -3,7 +3,6 @@ import { hashPassword, comparePassword } from "../utils/hash";
 import { signToken } from "../utils/jwt";
 import { AppError } from "../middleware/error.middleware";
 import { RegisterInput, LoginInput } from "../validators/auth.validator";
-import { Role } from "@prisma/client";
 
 export const authService = {
   async register(input: RegisterInput) {
@@ -13,12 +12,16 @@ export const authService = {
     }
 
     const hashed = await hashPassword(input.password);
-    const role = (input.role ?? "FACULTY") as Role;
-    const user = await userRepository.create({ name: input.name, email: input.email, password: hashed, role });
-
-    if (role === "FACULTY" && input.department && input.designation) {
-      await userRepository.createFacultyProfile(user.id, input.department, input.designation);
-    }
+    // Public registration is deliberately faculty-only. Admins must be provisioned out of band.
+    const role = "FACULTY" as const;
+    const user = await userRepository.createWithFacultyProfile({
+      name: input.name,
+      email: input.email,
+      password: hashed,
+      role,
+      department: input.department,
+      designation: input.designation,
+    });
 
     const token = signToken({ userId: user.id, role: user.role });
     return { token, user: { id: user.id, name: user.name, email: user.email, role: user.role } };

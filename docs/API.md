@@ -72,6 +72,12 @@ Response `201`: the created course.
 
 ## Document upload
 
+### `POST /documents/upload` (multipart/form-data)
+
+Canonical upload endpoint. Fields: `documentType` (`SYLLABUS` or `QUESTION_PAPER`), `courseId`, and `file` (PDF, <=10MB). Question papers also require `year` and `semester`.
+
+The legacy frontend endpoints below remain available:
+
 ### `POST /upload/syllabus` (multipart/form-data)
 Fields: `courseId`, `file` (PDF, ≤10MB). Response `201`: the stored `SyllabusDocument`.
 
@@ -82,7 +88,7 @@ Fields: `courseId`, `year`, `semester`, `file` (PDF). The backend extracts text 
 
 ## AI Analysis
 
-### `POST /analyze/exam`
+### `POST /analysis/exam`
 ```json
 { "courseId": 1, "questionPaperId": 4 }
 ```
@@ -103,7 +109,7 @@ Runs the Exam Quality Analyzer against the course's latest syllabus. Response `2
 ```
 Errors: `400` no syllabus uploaded yet · `404` question paper not found · `502` AI response invalid/unavailable · `503` AI provider not configured.
 
-### `POST /analyze/syllabus`
+### `POST /analysis/syllabus`
 ```json
 { "courseId": 1, "questionPaperId": 4 }
 ```
@@ -121,7 +127,7 @@ Runs the Syllabus Coverage Analyzer. Response `201`:
 }
 ```
 
-### `POST /analyze/similarity`
+### `POST /analysis/similarity`
 ```json
 { "courseId": 1, "currentPaperId": 4, "previousPaperId": 2 }
 ```
@@ -137,6 +143,28 @@ Runs the Question Similarity Detector between two papers of the same course. Res
   }
 }
 ```
+
+### `POST /analysis/question-review`
+
+```json
+{ "courseId": 1, "questionPaperId": 4, "questionIds": [21, 22] }
+```
+
+`questionIds` is optional. Returns per-question clarity and Bloom-level review, a 0-100 `qualityScore`, issues, recommendations, and the persisted `reportId`.
+
+### `POST /analysis/co-mapping`
+
+```json
+{
+  "courseId": 1,
+  "questionPaperId": 4,
+  "courseOutcomes": [{ "code": "CO1", "description": "Apply relational database design principles" }]
+}
+```
+
+`courseOutcomes` is optional; when omitted, explicitly labelled outcomes are inferred from the syllabus. Returns structured coverage percentages, mappings, unmapped questions, issues, recommendations, and a `reportId`.
+
+The `/analyze/*` paths remain backwards-compatible aliases.
 
 ---
 

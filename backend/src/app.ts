@@ -5,16 +5,20 @@ import { env } from "./config/env";
 import routes from "./routes";
 import { errorHandler, notFoundHandler } from "./middleware/error.middleware";
 import { apiRateLimiter } from "./middleware/rateLimiter.middleware";
+import { requestContext } from "./middleware/requestContext.middleware";
 
 const app = express();
 
 app.use(helmet());
-app.use(cors({ origin: env.frontendUrl, credentials: true }));
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
+app.use(requestContext);
+app.use(cors({ origin: env.frontendUrl.split(",").map((origin) => origin.trim()), credentials: true }));
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(apiRateLimiter);
 
-app.get("/health", (_req, res) => res.json({ status: "ok" }));
+app.get("/health", (_req, res) => res.json({ status: "ok", timestamp: new Date().toISOString() }));
 
 app.use("/api", routes);
 

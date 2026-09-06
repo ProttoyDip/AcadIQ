@@ -19,7 +19,7 @@ flowchart LR
 
 ## Stage details
 
-1. **Upload** — `POST /api/upload/syllabus` or `/api/upload/question-paper` (multipart, PDF only, 10MB cap, enforced in `middleware/upload.middleware.ts`).
+1. **Upload** — `POST /api/documents/upload` (multipart, PDF only, 10MB cap, enforced in `middleware/upload.middleware.ts`).
 2. **Parse** — `utils/pdfParser.ts` extracts raw text; `services/upload.service.ts` segments question papers into individual questions using a numbering heuristic (`Q1`, `1.`, etc.) and best-effort marks extraction.
 3. **Prompt management** — each analysis type has its own prompt module under `ai/prompts/`, separating the *system* instruction (task definition + strict output contract) from the *user* content (syllabus/question text). This keeps prompts versionable and testable independent of the LLM call itself.
 4. **AI analysis engine** — `ai/llmClient.ts` calls an OpenAI-compatible chat completions endpoint with `response_format: json_object`, so the model is constrained to return JSON. The provider/model are configured via env vars (`OPENAI_BASE_URL`, `OPENAI_MODEL`), keeping the pipeline vendor-agnostic.
@@ -41,8 +41,10 @@ flowchart LR
 
 | Feature | Endpoint | Pipeline | Prompt |
 |---|---|---|---|
-| Exam Quality Analyzer | `POST /api/analyze/exam` | `ai/pipeline/examAnalysisPipeline.ts` | `ai/prompts/examAnalysis.prompt.ts` |
-| Syllabus Coverage Analyzer | `POST /api/analyze/syllabus` | `ai/pipeline/syllabusPipeline.ts` | `ai/prompts/syllabusAnalysis.prompt.ts` |
-| Question Similarity Detector | `POST /api/analyze/similarity` | `ai/pipeline/similarityPipeline.ts` | `ai/prompts/similarity.prompt.ts` |
+| Exam Quality Analyzer | `POST /api/analysis/exam` | `ai/pipeline/examAnalysisPipeline.ts` | `ai/prompts/examAnalysis.prompt.ts` |
+| Question Review | `POST /api/analysis/question-review` | `ai/pipeline/questionReviewPipeline.ts` | `ai/prompts/questionReview.prompt.ts` |
+| Course Outcome Mapping | `POST /api/analysis/co-mapping` | `ai/pipeline/coMappingPipeline.ts` | `ai/prompts/coMapping.prompt.ts` |
+| Syllabus Coverage Analyzer | `POST /api/analysis/syllabus` | `ai/pipeline/syllabusPipeline.ts` | `ai/prompts/syllabusAnalysis.prompt.ts` |
+| Question Similarity Detector | `POST /api/analysis/similarity` | `ai/pipeline/similarityPipeline.ts` | `ai/prompts/similarity.prompt.ts` |
 
 The Recommendation Engine isn't a separate pipeline — each analysis prompt is required to emit a `recommendations` (or single `recommendation`) field as part of its structured output, so suggestions are always grounded in the same evidence used for scoring.

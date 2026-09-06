@@ -4,10 +4,12 @@ import { reportRepository } from "../repositories/report.repository";
 import { runSimilarityPipeline } from "../ai/pipeline/similarityPipeline";
 import { AppError } from "../middleware/error.middleware";
 import { AnalyzeSimilarityInput } from "../validators/analysis.validator";
-import { Prisma } from "@prisma/client";
+import { courseRepository } from "../repositories/course.repository";
 
 export const similarityService = {
   async analyze(facultyId: number, input: AnalyzeSimilarityInput) {
+    const course = await courseRepository.findOwnedById(input.courseId, facultyId);
+    if (!course) throw new AppError("Course not found", 404);
     const currentPaper = await documentRepository.findQuestionPaperById(input.currentPaperId);
     const previousPaper = await documentRepository.findQuestionPaperById(input.previousPaperId);
 
@@ -28,8 +30,10 @@ export const similarityService = {
 
     const report = await reportRepository.create({
       facultyId,
+      courseId: input.courseId,
+      questionPaperId: currentPaper.id,
       reportType: "QUESTION_SIMILARITY",
-      resultJson: result as unknown as Prisma.InputJsonValue,
+      resultJson: result,
     });
 
     return { reportId: report.id, ...result };

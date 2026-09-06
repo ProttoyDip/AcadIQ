@@ -45,3 +45,34 @@ export const questionSimilarityResponseSchema = z.object({
   overallDuplicationPercentage: z.number().min(0).max(100),
   recommendation: z.string(),
 });
+
+export const questionReviewResponseSchema = z.object({
+  qualityScore: z.number().min(0).max(100),
+  questions: z.array(z.object({
+    questionId: z.number().int().positive(),
+    clarityScore: z.number().min(0).max(100),
+    bloomLevel,
+    issues: z.array(z.string().min(1)),
+    suggestedRewrite: z.string().min(1).optional(),
+  })),
+  issues: z.array(z.object({
+    severity: priority,
+    message: z.string().min(1),
+    questionId: z.number().int().positive().optional(),
+  })),
+  recommendations: z.array(z.object({ message: z.string().min(1), priority })),
+});
+
+export const coMappingResponseSchema = z.object({
+  qualityScore: z.number().min(0).max(100),
+  coverage: z.record(z.number().min(0).max(100)),
+  mappings: z.array(z.object({
+    questionId: z.number().int().positive(),
+    courseOutcome: z.string().min(1),
+    strength: z.enum(["WEAK", "MODERATE", "STRONG"]),
+    rationale: z.string().min(1),
+  })),
+  unmappedQuestionIds: z.array(z.number().int().positive()),
+  issues: z.array(z.object({ severity: priority, message: z.string().min(1) })),
+  recommendations: z.array(z.object({ message: z.string().min(1), priority })),
+});

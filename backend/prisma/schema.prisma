@@ -1,6 +1,3 @@
-// AcadIQ database schema
-// Run `npm run prisma:migrate` inside backend/ to apply migrations.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -19,6 +16,8 @@ enum ReportType {
   EXAM_QUALITY
   SYLLABUS_COVERAGE
   QUESTION_SIMILARITY
+  QUESTION_REVIEW
+  CO_MAPPING
 }
 
 enum Priority {
@@ -28,16 +27,17 @@ enum Priority {
 }
 
 model User {
-  id             Int             @id @default(autoincrement())
-  name           String
-  email          String          @unique
-  password       String
-  role           Role            @default(FACULTY)
-  createdAt      DateTime        @default(now()) @map("created_at")
-
+  id             Int              @id @default(autoincrement())
+  name           String           @db.VarChar(100)
+  email          String           @unique @db.VarChar(191)
+  password       String           @db.VarChar(255)
+  role           Role             @default(FACULTY)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
   facultyProfile FacultyProfile?
   courses        Course[]
   reports        AnalysisReport[]
+  rubrics        Rubric[]
 
   @@map("users")
 }
@@ -45,92 +45,144 @@ model User {
 model FacultyProfile {
   id          Int    @id @default(autoincrement())
   userId      Int    @unique @map("user_id")
-  department  String
-  designation String
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department  String @db.VarChar(120)
+  designation String @db.VarChar(120)
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("faculty_profiles")
 }
 
 model Course {
-  id          Int      @id @default(autoincrement())
-  facultyId   Int      @map("faculty_id")
-  courseCode  String   @map("course_code")
-  courseName  String   @map("course_name")
-  description String?  @db.Text
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  faculty           User                @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  id                Int                @id @default(autoincrement())
+  facultyId         Int                @map("faculty_id")
+  courseCode        String             @map("course_code") @db.VarChar(30)
+  courseName        String             @map("course_name") @db.VarChar(180)
+  description       String?            @db.Text
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  faculty           User               @relation(fields: [facultyId], references: [id], onDelete: Cascade)
   syllabusDocuments SyllabusDocument[]
   questionPapers    QuestionPaper[]
+  reports           AnalysisReport[]
+  rubrics           Rubric[]
 
+  @@unique([facultyId, courseCode])
   @@index([facultyId])
   @@map("courses")
 }
 
 model SyllabusDocument {
-  id         Int      @id @default(autoincrement())
-  courseId   Int      @map("course_id")
-  filePath   String   @map("file_path")
-  uploadedAt DateTime @default(now()) @map("uploaded_at")
+  id           Int      @id @default(autoincrement())
+  courseId     Int      @map("course_id")
+  originalName String   @map("original_name") @db.VarChar(255)
+  filePath     String   @map("file_path") @db.VarChar(500)
+  mimeType     String   @map("mime_type") @db.VarChar(100)
+  fileSize     Int      @map("file_size")
+  uploadedAt   DateTime @default(now()) @map("uploaded_at")
+  course       Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
-  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-
-  @@index([courseId])
+  @@index([courseId, uploadedAt])
   @@map("syllabus_documents")
 }
 
 model QuestionPaper {
-  id       Int    @id @default(autoincrement())
-  courseId Int    @map("course_id")
-  year     Int
-  semester String
-  filePath String @map("file_path")
+  id           Int              @id @default(autoincrement())
+  courseId     Int              @map("course_id")
+  year         Int
+  semester     String           @db.VarChar(50)
+  originalName String           @map("original_name") @db.VarChar(255)
+  filePath     String           @map("file_path") @db.VarChar(500)
+  mimeType     String           @map("mime_type") @db.VarChar(100)
+  fileSize     Int              @map("file_size")
+  uploadedAt   DateTime         @default(now()) @map("uploaded_at")
+  course       Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions    Question[]
+  reports      AnalysisReport[]
 
-  course    Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  questions Question[]
-
-  @@index([courseId])
+  @@index([courseId, uploadedAt])
   @@map("question_papers")
 }
 
 model Question {
-  id           Int     @id @default(autoincrement())
-  paperId      Int     @map("paper_id")
-  questionText String  @map("question_text") @db.Text
-  marks        Int
-  topic        String?
-  bloomLevel   String? @map("bloom_level")
+  id             Int             @id @default(autoincrement())
+  paperId        Int             @map("paper_id")
+  sequenceNumber Int             @map("sequence_number")
+  questionText   String          @map("question_text") @db.Text
+  marks          Int             @default(0)
+  topic          String?         @db.VarChar(191)
+  bloomLevel     String?         @map("bloom_level") @db.VarChar(30)
+  paper          QuestionPaper   @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  studentAnswers StudentAnswer[]
 
-  paper QuestionPaper @relation(fields: [paperId], references: [id], onDelete: Cascade)
-
+  @@unique([paperId, sequenceNumber])
   @@index([paperId])
   @@map("questions")
 }
 
 model AnalysisReport {
-  id         Int        @id @default(autoincrement())
-  facultyId  Int        @map("faculty_id")
-  reportType ReportType @map("report_type")
-  resultJson Json       @map("result_json")
-  createdAt  DateTime   @default(now()) @map("created_at")
-
+  id              Int              @id @default(autoincrement())
+  facultyId       Int              @map("faculty_id")
+  courseId        Int?             @map("course_id")
+  questionPaperId Int?             @map("question_paper_id")
+  reportType      ReportType       @map("report_type")
+  resultJson      Json             @map("result_json")
+  createdAt       DateTime         @default(now()) @map("created_at")
   faculty         User             @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  course          Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  questionPaper   QuestionPaper?   @relation(fields: [questionPaperId], references: [id], onDelete: SetNull)
   recommendations Recommendation[]
 
-  @@index([facultyId])
+  @@index([facultyId, createdAt])
+  @@index([courseId])
+  @@index([questionPaperId])
   @@map("analysis_reports")
 }
 
 model Recommendation {
-  id       Int      @id @default(autoincrement())
-  reportId Int      @map("report_id")
-  message  String   @db.Text
-  priority Priority @default(MEDIUM)
-
-  report AnalysisReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  id        Int            @id @default(autoincrement())
+  reportId  Int            @map("report_id")
+  message   String         @db.Text
+  priority  Priority       @default(MEDIUM)
+  createdAt DateTime       @default(now()) @map("created_at")
+  report    AnalysisReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@index([reportId])
   @@map("recommendations")
+}
+
+model Rubric {
+  id          Int             @id @default(autoincrement())
+  courseId    Int             @map("course_id")
+  createdById Int             @map("created_by_id")
+  name        String          @db.VarChar(160)
+  description String?         @db.Text
+  criteria    Json
+  maxScore    Decimal         @map("max_score") @db.Decimal(7, 2)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  course      Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdBy   User            @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  answers     StudentAnswer[]
+
+  @@index([courseId])
+  @@index([createdById])
+  @@map("rubrics")
+}
+
+model StudentAnswer {
+  id                Int       @id @default(autoincrement())
+  questionId        Int       @map("question_id")
+  rubricId          Int?      @map("rubric_id")
+  studentIdentifier String    @map("student_identifier") @db.VarChar(100)
+  answerText        String    @map("answer_text") @db.LongText
+  score             Decimal?  @db.Decimal(7, 2)
+  feedback          Json?
+  submittedAt       DateTime  @default(now()) @map("submitted_at")
+  gradedAt          DateTime? @map("graded_at")
+  question          Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  rubric            Rubric?   @relation(fields: [rubricId], references: [id], onDelete: SetNull)
+
+  @@index([questionId])
+  @@index([rubricId])
+  @@map("student_answers")
 }
