@@ -13,6 +13,7 @@ import UploadAnalysis from "./pages/UploadAnalysis";
 import AnalysisReport from "./pages/AnalysisReport";
 import QuestionMemory from "./pages/QuestionMemory";
 import Settings from "./pages/Settings";
+import DualEvaluatorPage from "./pages/DualEvaluatorPage";
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
             <Route path="/upload" element={<UploadAnalysis />} />
             <Route path="/reports/:id" element={<AnalysisReport />} />
             <Route path="/question-memory" element={<QuestionMemory />} />
+            <Route path="/dual-evaluate" element={<DualEvaluatorPage />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
         </Route>
@@ -47,3 +49,4 @@ export default function App() {
     </BrowserRouter>
   );
 }
+

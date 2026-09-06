@@ -8,6 +8,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Sparkles,
+  BrainCircuit,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useUiStore } from "../../store/uiStore";
@@ -16,9 +17,11 @@ const links = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/courses", label: "Courses", icon: GraduationCap },
   { to: "/upload", label: "Upload & Analyze", icon: UploadCloud },
+  { to: "/dual-evaluate", label: "Dual LLM Evaluator", icon: BrainCircuit },
   { to: "/question-memory", label: "Question Memory", icon: FileSearch2 },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
+
 
 export default function Sidebar() {
   const { sidebarCollapsed, toggleSidebar } = useUiStore();
