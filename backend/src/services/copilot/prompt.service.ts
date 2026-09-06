@@ -44,12 +44,13 @@ function renderCourseSection(context: CopilotContext): string {
 }
 
 function renderExamQualitySection(context: CopilotContext): string {
-  if (!context.examQuality) return "";
+  const quality = context.examQuality ?? (context as any).reportSummary;
+  if (!quality) return "";
   let section = `\n\nExam Quality Report:`;
-  section += `\n- Overall Quality Score: ${context.examQuality.qualityScore}/100`;
-  if (context.examQuality.positivePoints?.length) section += `\n- Key Strengths: ${JSON.stringify(context.examQuality.positivePoints)}`;
-  if (context.examQuality.issues?.length) section += `\n- Identified Issues: ${JSON.stringify(context.examQuality.issues)}`;
-  if (context.examQuality.recommendations?.length) section += `\n- Recommendations: ${JSON.stringify(context.examQuality.recommendations)}`;
+  section += `\n- Overall Quality Score: ${quality.qualityScore}/100`;
+  if (quality.positivePoints?.length) section += `\n- Key Strengths: ${JSON.stringify(quality.positivePoints)}`;
+  if (quality.issues?.length) section += `\n- Identified Issues: ${JSON.stringify(quality.issues)}`;
+  if (quality.recommendations?.length) section += `\n- Recommendations: ${JSON.stringify(quality.recommendations)}`;
   return section;
 }
 

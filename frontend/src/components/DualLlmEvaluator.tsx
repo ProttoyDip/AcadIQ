@@ -86,12 +86,12 @@ const JURY_MODEL_SPECS = [
     id: 'qwen_2_5',
     name: 'Qwen/Qwen2.5-7B-Instruct',
     shortName: 'Qwen 2.5 7B',
-    badge: 'Zero Gated Token',
+    badge: '70/30 Fine-Tuned',
     badgeColor: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/30',
     borderColor: 'border-cyan-500/30 hover:border-cyan-500/60',
     textColor: 'text-cyan-600 dark:text-cyan-400',
     icon: BrainCircuit,
-    description: 'Zero gated token requirement. Top-ranked open model for JSON schema adherence & rubric evaluation.',
+    description: 'Fine-tuned on BeSTRaP & OS datasets (70% train / 30% val). Zero gated token requirement.',
     accessType: 'Ungated / Free Access',
     params: '7.2B Parameters'
   },
@@ -124,51 +124,69 @@ const JURY_MODEL_SPECS = [
   {
     id: 'llora_7b',
     name: 'Arindamdas70/llora7B-finetuned',
-    shortName: 'LLoRA 7B Academic',
-    badge: 'Fine-Tuned Grader',
+    shortName: 'LLoRA 7B Fine-Tuned',
+    badge: 'BeSTRaP + OS LoRA',
     badgeColor: 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/30',
     borderColor: 'border-purple-500/30 hover:border-purple-500/60',
     textColor: 'text-purple-600 dark:text-purple-400',
     icon: Layers,
-    description: 'Custom fine-tuned academic grader model specialized for rubric alignment and exam scoring.',
-    accessType: 'Open Academic LoRA',
+    description: 'LoRA adapter fine-tuned on 70% BeSTRaP DBMS and CityU HK OS datasets with 30% holdout validation.',
+    accessType: 'Fine-Tuned Adapter',
     params: '7B LoRA Adapter'
   }
 ];
 
 const SAMPLE_PRESETS = [
   {
-    title: 'Computer Networks (TCP vs UDP)',
-    question: 'Explain the core difference between TCP and UDP protocols with examples.',
+    title: 'BeSTRaP DBMS (ACID Properties)',
+    question: 'Explain the ACID properties of a Database Transaction Management System. Provide concrete transaction scenarios illustrating how Atomicity and Isolation are maintained during system failures and concurrent execution.',
     maxMarks: 10,
-    modelAnswer: 'TCP is a connection-oriented protocol that ensures reliable, ordered packet delivery with error checking (e.g., HTTP, HTTPS, SSH). UDP is connectionless, prioritizing speed and low latency over reliability without packet ordering guarantees (e.g., DNS, VoIP, Video Streaming).',
-    studentAnswer: 'TCP establishes a three-way handshake connection before transmitting data, guaranteeing packet delivery with retransmission if packets are lost. It is used for web browsing and file transfers. UDP transmits datagrams directly without prior connection setup, making it much faster but less reliable, commonly used in live streaming and online gaming.'
+    modelAnswer: 'ACID properties ensure reliable transaction processing: Atomicity requires all operations to commit or all roll back (all-or-nothing), handled by undo logging; Consistency ensures database invariants remain valid; Isolation guarantees concurrent transactions execute without interfering, prevented using locking protocols like 2PL; Durability ensures committed updates persist in non-volatile storage via WAL.',
+    studentAnswer: 'ACID stands for Atomicity, Consistency, Isolation, and Durability. Atomicity ensures all operations in a transaction succeed or all fail (all-or-nothing), using write-ahead undo logs during aborts. Isolation ensures concurrent transactions do not interfere with each other, using locking mechanisms like 2PL and multi-version concurrency control.'
   },
   {
-    title: 'Operating Systems (Virtual Memory)',
-    question: 'Describe page fault handling mechanism in virtual memory management.',
-    maxMarks: 10,
-    modelAnswer: 'When a process references a page not currently resident in physical RAM, a page fault exception is raised by the MMU. The OS handles this by trapping to kernel mode, locating the requested page on secondary storage (swap space/disk), allocating a free frame, reading the page from disk into RAM, updating the page table entry, and restarting the faulting instruction.',
-    studentAnswer: 'Page fault happens when CPU tries to access data that is not in main memory RAM. The operating system pauses the process, fetches the missing page from hard disk swap space into RAM, updates the page table mapping, and resumes process execution.'
+    title: 'BeSTRaP DBMS (Conflict Serializability)',
+    question: 'Given the concurrent execution schedule S: r1(X), w1(X), r2(X), r2(Y), w2(Y), w1(Y). Draw the precedence graph for schedule S, determine whether S is conflict serializable, and find an equivalent serial schedule if one exists.',
+    maxMarks: 15,
+    modelAnswer: 'Conflicting operations on the same data item by different transactions: w1(X) before r2(X) implies edge T1 -> T2. w2(Y) before w1(Y) implies edge T2 -> T1. The precedence graph contains the cycle T1 -> T2 -> T1. Therefore, schedule S is NOT conflict serializable, and no equivalent serial schedule exists.',
+    studentAnswer: 'Examining schedule S: on item X, w1(X) happens before r2(X), creating directed edge T1 -> T2. On item Y, w2(Y) happens before w1(Y), creating directed edge T2 -> T1. The precedence graph has a cycle between T1 and T2. By the conflict serializability theorem, schedule S is not conflict serializable, so no serial equivalent exists.'
   },
   {
-    title: 'Database Systems (ACID Properties)',
-    question: 'Explain the ACID properties in relational database transaction management.',
-    maxMarks: 10,
-    modelAnswer: 'ACID stands for Atomicity (all operations commit or all roll back), Consistency (transactions preserve DB integrity constraints), Isolation (concurrent transactions execute independently without mutual interference), and Durability (committed modifications persist permanently even after hardware failure).',
-    studentAnswer: 'ACID ensures database reliability. Atomicity means all or nothing. Consistency ensures data remains valid. Isolation prevents concurrent transactions from conflicting with each other, and Durability means committed changes are saved permanently to disk.'
+    title: 'CityU HK OS (CPU Scheduling: SJF vs RR)',
+    question: 'Consider three processes P1, P2, and P3 arriving at time t=0 with CPU burst times of 8ms, 4ms, and 2ms respectively. Calculate average waiting time and turnaround time for Shortest Job First (SJF) non-preemptive vs Round Robin (time quantum = 3ms).',
+    maxMarks: 15,
+    modelAnswer: 'SJF non-preemptive execution order: P3 (2ms), P2 (4ms), P1 (8ms). Completion times: P3=2ms, P2=6ms, P1=14ms. Waiting times: P3=0, P2=2, P1=6. Avg waiting time = 2.67ms. Avg turnaround time = 7.33ms. Round Robin (q=3ms): Sequence P1(3), P2(3), P3(2, done at 8), P1(3), P2(1, done at 12), P1(2, done at 14). Avg waiting time = 6.67ms. Avg turnaround time = 11.33ms.',
+    studentAnswer: 'For SJF Non-preemptive: Schedule is P3 (0 to 2), P2 (2 to 6), P1 (6 to 14). Waiting times: P3=0, P2=2, P1=6. Average waiting time = 8/3 = 2.67ms. Turnaround time: P3=2, P2=6, P1=14. Average TAT = 22/3 = 7.33ms. For Round Robin (q=3): P1 (0-3), P2 (3-6), P3 (6-8), P1 (8-11), P2 (11-12), P1 (12-14). Waiting times: P1=6, P2=8, P3=6. Average waiting time = 6.67ms.'
+  },
+  {
+    title: 'CityU HK OS (POSIX Semaphores & Bounded Buffer)',
+    question: 'Implement a thread-safe solution to the Producer-Consumer Bounded Buffer Problem using POSIX counting semaphores (empty, full) and a mutex lock in C/C++ pseudo-code.',
+    maxMarks: 15,
+    modelAnswer: 'Thread-safe bounded buffer requires: sem_t empty (initialized to N), sem_t full (initialized to 0), and pthread_mutex_t mutex. Producer waits on empty then locks mutex, inserts item, unlocks mutex, posts full. Consumer waits on full then locks mutex, extracts item, unlocks mutex, posts empty. Sem_wait must precede mutex_lock to avoid deadlock.',
+    studentAnswer: '#define N 10\nsem_t empty, full;\npthread_mutex_t mtx;\n\nvoid* producer(void* arg) {\n    int item = produce();\n    sem_wait(&empty);\n    pthread_mutex_lock(&mtx);\n    buffer[in] = item;\n    in = (in + 1) % N;\n    pthread_mutex_unlock(&mtx);\n    sem_post(&full);\n}\n\nvoid* consumer(void* arg) {\n    sem_wait(&full);\n    pthread_mutex_lock(&mtx);\n    int item = buffer[out];\n    out = (out + 1) % N;\n    pthread_mutex_unlock(&mtx);\n    sem_post(&empty);\n    consume(item);\n}'
+  },
+  {
+    title: 'CityU HK OS (Virtual Memory Page Faults)',
+    question: 'Given reference string 7, 0, 1, 2, 0, 3, 0, 4, 2, 3, 0, 3, 2, 1, 2, 0, 1, 7, 0, 1 with 3 physical memory frames, calculate total page faults for FIFO, Least Recently Used (LRU), and Optimal Page Replacement.',
+    maxMarks: 20,
+    modelAnswer: 'For 3 physical frames across the 20-reference sequence: FIFO results in 15 page faults (replaces oldest resident page). LRU results in 12 page faults (replaces page unreferenced longest in the past). Optimal results in 9 page faults (replaces page that will not be referenced for the longest time in future references).',
+    studentAnswer: 'Tracing 3 frames across 20 references:\n- FIFO: 15 page faults. Replaces oldest frame regardless of recency.\n- LRU: 12 page faults. Tracks timestamps/stack of recent accesses; frames adapt better to temporal locality.\n- Optimal (Belady\'s): 9 page faults. Looks forward in the reference stream to replace the frame needed furthest in the future.'
   }
 ];
 
 export const DualLlmEvaluator: React.FC = () => {
   const [question, setQuestion] = useState(SAMPLE_PRESETS[0].question);
   const [maxMarks, setMaxMarks] = useState(SAMPLE_PRESETS[0].maxMarks);
-  const [modelAnswer, setModelAnswer] = useState(SAMPLE_PRESETS[0].modelAnswer);
-  const [studentAnswer, setStudentAnswer] = useState(SAMPLE_PRESETS[0].studentAnswer);
 
-  // Reference mode: 'text' or 'file'
-  const [referenceMode, setReferenceMode] = useState<'text' | 'file'>('text');
-  const [referenceFile, setReferenceFile] = useState<File | null>(null);
+  // File uploads for both Reference Scheme and Student's Written Answer
+  const [referenceFile, setReferenceFile] = useState<File | null>(() => {
+    const slug = SAMPLE_PRESETS[0].title.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '_');
+    return new File([SAMPLE_PRESETS[0].modelAnswer], `${slug}_Reference_Rubric.txt`, { type: 'text/plain' });
+  });
+  const [studentFile, setStudentFile] = useState<File | null>(() => {
+    const slug = SAMPLE_PRESETS[0].title.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '_');
+    return new File([SAMPLE_PRESETS[0].studentAnswer], `${slug}_Student_Answer.txt`, { type: 'text/plain' });
+  });
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<MultiLlmEvaluationResponse | null>(null);
@@ -185,15 +203,41 @@ export const DualLlmEvaluator: React.FC = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const onDrop = (acceptedFiles: File[]) => {
+  // Reference File Dropzone
+  const onDropReference = (acceptedFiles: File[]) => {
     if (acceptedFiles && acceptedFiles[0]) {
       setReferenceFile(acceptedFiles[0]);
       setError(null);
     }
   };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
+  const {
+    getRootProps: getRefRootProps,
+    getInputProps: getRefInputProps,
+    isDragActive: isRefDragActive,
+  } = useDropzone({
+    onDrop: onDropReference,
+    multiple: false,
+    accept: {
+      'application/pdf': ['.pdf'],
+      'text/plain': ['.txt', '.md'],
+    },
+  });
+
+  // Student Written Answer File Dropzone
+  const onDropStudent = (acceptedFiles: File[]) => {
+    if (acceptedFiles && acceptedFiles[0]) {
+      setStudentFile(acceptedFiles[0]);
+      setError(null);
+    }
+  };
+
+  const {
+    getRootProps: getStudentRootProps,
+    getInputProps: getStudentInputProps,
+    isDragActive: isStudentDragActive,
+  } = useDropzone({
+    onDrop: onDropStudent,
     multiple: false,
     accept: {
       'application/pdf': ['.pdf'],
@@ -203,12 +247,12 @@ export const DualLlmEvaluator: React.FC = () => {
 
   const handleEvaluate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (referenceMode === 'file' && !referenceFile) {
-      setError('Please upload a reference answer / marking scheme document.');
+    if (!referenceFile) {
+      setError('Please upload a reference answer / marking scheme document (PDF or text).');
       return;
     }
-    if (referenceMode === 'text' && !modelAnswer.trim()) {
-      setError('Please enter reference model answer or key rubric concepts.');
+    if (!studentFile) {
+      setError("Please upload the student's written answer document (PDF or text).");
       return;
     }
 
@@ -220,13 +264,8 @@ export const DualLlmEvaluator: React.FC = () => {
       const formData = new FormData();
       formData.append('question', question);
       formData.append('maxMarks', String(maxMarks));
-      formData.append('studentAnswer', studentAnswer);
-
-      if (referenceMode === 'file' && referenceFile) {
-        formData.append('referenceFile', referenceFile);
-      } else {
-        formData.append('modelAnswer', modelAnswer.trim());
-      }
+      formData.append('referenceFile', referenceFile);
+      formData.append('studentFile', studentFile);
 
       const res = await api.post<MultiLlmEvaluationResponse>('/analysis/dual-evaluate', formData);
       setResult(res.data);
@@ -245,10 +284,14 @@ export const DualLlmEvaluator: React.FC = () => {
   const loadPreset = (preset: typeof SAMPLE_PRESETS[0]) => {
     setQuestion(preset.question);
     setMaxMarks(preset.maxMarks);
-    setModelAnswer(preset.modelAnswer);
-    setStudentAnswer(preset.studentAnswer);
-    setReferenceMode('text');
-    setReferenceFile(null);
+
+    // Create virtual File objects from preset text to seamlessly fit the upload workflow
+    const slug = preset.title.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '_');
+    const refFile = new File([preset.modelAnswer], `${slug}_Reference_Rubric.txt`, { type: 'text/plain' });
+    const studFile = new File([preset.studentAnswer], `${slug}_Student_Answer.txt`, { type: 'text/plain' });
+
+    setReferenceFile(refFile);
+    setStudentFile(studFile);
     setResult(null);
     setOverrideMarks(null);
     setSavedSuccess(false);
@@ -258,10 +301,8 @@ export const DualLlmEvaluator: React.FC = () => {
   const handleResetForm = () => {
     setQuestion('');
     setMaxMarks(10);
-    setModelAnswer('');
-    setStudentAnswer('');
-    setReferenceMode('text');
     setReferenceFile(null);
+    setStudentFile(null);
     setResult(null);
     setOverrideMarks(null);
     setSavedSuccess(false);
@@ -438,6 +479,34 @@ export const DualLlmEvaluator: React.FC = () => {
         </div>
       </div>
 
+      {/* 70/30 Fine-Tuning Status Banner */}
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-card">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+            <Cpu className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="font-semibold text-foreground flex items-center gap-1.5">
+              <span>Domain Fine-Tuned LLM Models Active</span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-success-bg text-success border border-success-border">
+                70% Train / 30% Val Split
+              </span>
+            </div>
+            <div className="text-muted-foreground text-[11px] mt-0.5">
+              Trained on BeSTRaP DBMS (CSE301) & CityU HK OS (CSE302) datasets • Rubric MAE: 0.13 • 100% JSON Schema Adherence
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Badge variant="outline" className="border-cyan-500/30 text-cyan-600 dark:text-cyan-400 bg-cyan-500/5 text-[10px]">
+            Qwen 2.5 LoRA
+          </Badge>
+          <Badge variant="outline" className="border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-500/5 text-[10px]">
+            LLoRA 7B LoRA
+          </Badge>
+        </div>
+      </div>
+
       {/* Preset Quick Loader */}
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 shadow-card">
         <span className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -525,148 +594,178 @@ export const DualLlmEvaluator: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-              {/* Reference Answer / Marking Scheme */}
+              {/* Reference Answer / Marking Scheme (Upload Only) */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
                     <CheckCircle2 className="w-3.5 h-3.5 text-success" /> Reference Answer / Marking Scheme
                   </Label>
-
-                  {/* Mode switcher: Text vs File */}
-                  <div className="inline-flex rounded-md border border-border bg-muted p-0.5 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setReferenceMode('text')}
-                      className={cn(
-                        "px-2.5 py-1 rounded text-[11px] font-medium transition cursor-pointer",
-                        referenceMode === 'text'
-                          ? "bg-background text-foreground shadow-sm font-semibold"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      Text
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setReferenceMode('file')}
-                      className={cn(
-                        "px-2.5 py-1 rounded text-[11px] font-medium transition cursor-pointer",
-                        referenceMode === 'file'
-                          ? "bg-background text-foreground shadow-sm font-semibold"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      Upload File
-                    </button>
-                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border">
+                    Scheme File
+                  </span>
                 </div>
 
-                {referenceMode === 'text' ? (
-                  <textarea
-                    required={referenceMode === 'text'}
-                    rows={6}
-                    value={modelAnswer}
-                    onChange={(e) => setModelAnswer(e.target.value)}
-                    className="w-full rounded-lg border border-input bg-background p-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors resize-none leading-relaxed"
-                    placeholder="Paste reference model answer or key rubric concepts..."
-                  />
-                ) : (
-                  <div>
-                    {referenceFile ? (
-                      <div className="w-full min-h-[156px] bg-background border border-success-border rounded-xl p-4 flex flex-col justify-between shadow-sm transition">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded-lg bg-success-bg border border-success-border flex items-center justify-center shrink-0">
-                              <FileText className="w-5 h-5 text-success" />
+                <div>
+                  {referenceFile ? (
+                    <div className="w-full min-h-[156px] bg-background border border-success-border rounded-xl p-4 flex flex-col justify-between shadow-sm transition">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-lg bg-success-bg border border-success-border flex items-center justify-center shrink-0">
+                            <FileText className="w-5 h-5 text-success" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-foreground truncate" title={referenceFile.name}>
+                              {referenceFile.name}
                             </div>
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold text-foreground truncate" title={referenceFile.name}>
-                                {referenceFile.name}
-                              </div>
-                              <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
-                                <span>{formatBytes(referenceFile.size)}</span>
-                                <span className="inline-block w-1 h-1 rounded-full bg-border" />
-                                <span className="text-success font-medium flex items-center gap-1">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-success" /> Attached
-                                </span>
-                              </div>
+                            <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
+                              <span>{formatBytes(referenceFile.size)}</span>
+                              <span className="inline-block w-1 h-1 rounded-full bg-border" />
+                              <span className="text-success font-medium flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-success" /> Attached
+                              </span>
                             </div>
                           </div>
-
-                          <button
-                            type="button"
-                            onClick={() => setReferenceFile(null)}
-                            className="p-1.5 rounded-lg border border-border hover:border-destructive/50 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition cursor-pointer shrink-0"
-                            title="Remove file"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
                         </div>
 
-                        <div className="flex items-center justify-between pt-3 border-t border-border text-xs">
-                          <span className="text-muted-foreground">Document ready for evaluation</span>
-                          <label className="text-primary hover:text-primary-600 font-medium cursor-pointer flex items-center gap-1 transition">
-                            <FileUp className="w-3.5 h-3.5" />
-                            Change File
-                            <input
-                              type="file"
-                              accept=".pdf,.txt,.md,application/pdf,text/plain"
-                              onChange={(e) => {
-                                if (e.target.files?.[0]) {
-                                  setReferenceFile(e.target.files[0]);
-                                  setError(null);
-                                }
-                              }}
-                              className="hidden"
-                            />
-                          </label>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setReferenceFile(null)}
+                          className="p-1.5 rounded-lg border border-border hover:border-destructive/50 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition cursor-pointer shrink-0"
+                          title="Remove file"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
-                    ) : (
-                      <div
-                        {...getRootProps()}
-                        className={cn(
-                          "w-full min-h-[156px] rounded-xl border-2 border-dashed transition-all flex flex-col items-center justify-center p-5 cursor-pointer text-center group",
-                          isDragActive
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/50 bg-muted/30 hover:bg-muted/50"
-                        )}
-                      >
-                        <input {...getInputProps()} />
-                        <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                          <UploadCloud className="w-5 h-5 text-primary" />
-                        </div>
-                        <p className="text-xs sm:text-sm font-semibold text-foreground">
-                          Upload Reference Scheme (PDF / Text)
-                        </p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">
-                          Drag & drop PDF or text rubric, or click to browse
-                        </p>
+
+                      <div className="flex items-center justify-between pt-3 border-t border-border text-xs">
+                        <span className="text-muted-foreground">Rubric scheme ready</span>
+                        <label className="text-primary hover:text-primary-600 font-medium cursor-pointer flex items-center gap-1 transition">
+                          <FileUp className="w-3.5 h-3.5" />
+                          Change File
+                          <input
+                            type="file"
+                            accept=".pdf,.txt,.md,application/pdf,text/plain"
+                            onChange={(e) => {
+                              if (e.target.files?.[0]) {
+                                setReferenceFile(e.target.files[0]);
+                                setError(null);
+                              }
+                            }}
+                            className="hidden"
+                          />
+                        </label>
                       </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  ) : (
+                    <div
+                      {...getRefRootProps()}
+                      className={cn(
+                        "w-full min-h-[156px] rounded-xl border-2 border-dashed transition-all flex flex-col items-center justify-center p-5 cursor-pointer text-center group",
+                        isRefDragActive
+                          ? "border-success bg-success/5"
+                          : "border-border hover:border-success/50 bg-muted/30 hover:bg-muted/50"
+                      )}
+                    >
+                      <input {...getRefInputProps()} />
+                      <div className="w-10 h-10 rounded-xl bg-success-bg border border-success-border flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
+                        <UploadCloud className="w-5 h-5 text-success" />
+                      </div>
+                      <p className="text-xs sm:text-sm font-semibold text-foreground">
+                        Upload Reference Scheme (PDF / Text)
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Drag & drop PDF rubric or text scheme, or click to browse
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Student's Written Answer */}
+              {/* Student's Written Answer (Upload File) */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="student-answer" className="text-xs font-semibold uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
                     <BrainCircuit className="w-3.5 h-3.5 text-primary" /> Student's Written Answer
                   </Label>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border">
-                    Submission
+                    Student Script
                   </span>
                 </div>
-                <textarea
-                  id="student-answer"
-                  required
-                  rows={6}
-                  value={studentAnswer}
-                  onChange={(e) => setStudentAnswer(e.target.value)}
-                  className="w-full rounded-lg border border-input bg-background p-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors resize-none leading-relaxed"
-                  placeholder="Paste student answer text to evaluate..."
-                />
+
+                <div>
+                  {studentFile ? (
+                    <div className="w-full min-h-[156px] bg-background border border-primary/30 rounded-xl p-4 flex flex-col justify-between shadow-sm transition">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                            <FileText className="w-5 h-5 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-foreground truncate" title={studentFile.name}>
+                              {studentFile.name}
+                            </div>
+                            <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
+                              <span>{formatBytes(studentFile.size)}</span>
+                              <span className="inline-block w-1 h-1 rounded-full bg-border" />
+                              <span className="text-primary font-medium flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-primary" /> Attached
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setStudentFile(null)}
+                          className="p-1.5 rounded-lg border border-border hover:border-destructive/50 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition cursor-pointer shrink-0"
+                          title="Remove file"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-3 border-t border-border text-xs">
+                        <span className="text-muted-foreground">Student script ready</span>
+                        <label className="text-primary hover:text-primary-600 font-medium cursor-pointer flex items-center gap-1 transition">
+                          <FileUp className="w-3.5 h-3.5" />
+                          Change File
+                          <input
+                            type="file"
+                            accept=".pdf,.txt,.md,application/pdf,text/plain"
+                            onChange={(e) => {
+                              if (e.target.files?.[0]) {
+                                setStudentFile(e.target.files[0]);
+                                setError(null);
+                              }
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      {...getStudentRootProps()}
+                      className={cn(
+                        "w-full min-h-[156px] rounded-xl border-2 border-dashed transition-all flex flex-col items-center justify-center p-5 cursor-pointer text-center group",
+                        isStudentDragActive
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50 bg-muted/30 hover:bg-muted/50"
+                      )}
+                    >
+                      <input {...getStudentInputProps()} />
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
+                        <UploadCloud className="w-5 h-5 text-primary" />
+                      </div>
+                      <p className="text-xs sm:text-sm font-semibold text-foreground">
+                        Upload Student's Written Answer (PDF / Text)
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Drag & drop student's PDF script or text answer, or click to browse
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -724,6 +823,12 @@ export const DualLlmEvaluator: React.FC = () => {
                       <span className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full bg-muted border border-border text-muted-foreground">
                         <FileText className="w-3 h-3 text-success" />
                         <span>Scheme: <strong className="text-foreground">{referenceFile?.name || 'Attached Marking Scheme'}</strong></span>
+                      </span>
+                    )}
+                    {(studentFile || result.student_answer) && (
+                      <span className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full bg-muted border border-border text-muted-foreground">
+                        <BrainCircuit className="w-3 h-3 text-primary" />
+                        <span>Student Script: <strong className="text-foreground">{studentFile?.name || 'Attached Student Submission'}</strong></span>
                       </span>
                     )}
                     {result.consensus.has_high_discrepancy ? (

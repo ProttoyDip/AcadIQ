@@ -33,11 +33,12 @@ export const env = {
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
+  groqApiKey: groqApiKey ?? "",
   openAiApiKey,
   openAiBaseUrl:
     process.env.OPENAI_BASE_URL ??
     (isGroq ? "https://api.groq.com/openai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions"),
-  openAiModel: process.env.OPENAI_MODEL ?? (isGroq ? "openai/gpt-oss-120b" : "gpt-4o-mini"),
+  openAiModel: process.env.OPENAI_MODEL ?? (isGroq ? "llama-3.3-70b-versatile" : "gpt-4o-mini"),
   aiTimeoutMs: positiveInteger("AI_TIMEOUT_MS", 45_000),
   maxAiInputChars: positiveInteger("MAX_AI_INPUT_CHARS", 80_000),
   isGroq,

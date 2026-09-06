@@ -61,7 +61,7 @@ export const uploadReferenceScheme = multer({
     ) {
       cb(null, true);
     } else {
-      cb(new Error("Only PDF or text files (.pdf, .txt, .md) are allowed as marking schemes"));
+      cb(new Error("Only PDF or text files (.pdf, .txt, .md) are allowed"));
     }
   },
 });
