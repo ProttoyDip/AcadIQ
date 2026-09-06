@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { LogOut, Search, User } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { Avatar, AvatarFallback } from "../ui/avatar";
+import { ThemeToggle } from "../ui/ThemeToggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,32 +36,36 @@ export default function Topbar() {
         />
       </div>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-accent">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback>{initials(user?.name)}</AvatarFallback>
-          </Avatar>
-          <div className="hidden text-left sm:block">
-            <p className="text-small font-medium leading-none">{user?.name}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{user?.role === "ADMIN" ? "Administrator" : "Faculty"}</p>
-          </div>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuLabel>My account</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => navigate("/settings")}>
-            <User className="h-4 w-4" /> Settings
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => {
-              logout();
-              navigate("/login");
-            }}
-          >
-            <LogOut className="h-4 w-4" /> Log out
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="flex items-center gap-3">
+        <ThemeToggle variant="icon" />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-accent">
+            <Avatar className="h-8 w-8">
+              <AvatarFallback>{initials(user?.name)}</AvatarFallback>
+            </Avatar>
+            <div className="hidden text-left sm:block">
+              <p className="text-small font-medium leading-none">{user?.name}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{user?.role === "ADMIN" ? "Administrator" : "Faculty"}</p>
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel>My account</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => navigate("/settings")}>
+              <User className="h-4 w-4" /> Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                logout();
+                navigate("/login");
+              }}
+            >
+              <LogOut className="h-4 w-4" /> Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </header>
   );
 }

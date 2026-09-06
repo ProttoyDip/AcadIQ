@@ -17,3 +17,16 @@ export function useRegister() {
     onSuccess: ({ token, user }) => setAuth(token, user),
   });
 }
+
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: (payload: { email: string }) => authService.forgotPassword(payload),
+  });
+}
+
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: (payload: { token: string; newPassword: string }) => authService.resetPassword(payload),
+  });
+}
+

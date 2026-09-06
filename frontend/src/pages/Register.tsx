@@ -41,12 +41,12 @@ export default function Register() {
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">Full name</Label>
-          <Input id="name" placeholder="Dr. Jane Rahman" required value={form.name} onChange={(e) => update("name", e.target.value)} />
+          <Input id="name" placeholder="Dr. Faculty Name" required value={form.name} onChange={(e) => update("name", e.target.value)} />
         </div>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="reg-email">Email</Label>
-          <Input id="reg-email" type="email" required value={form.email} onChange={(e) => update("email", e.target.value)} />
+          <Input id="reg-email" type="email" placeholder="faculty@university.edu" required value={form.email} onChange={(e) => update("email", e.target.value)} />
         </div>
 
         <div className="flex flex-col gap-1.5">

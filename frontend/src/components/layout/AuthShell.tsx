@@ -1,6 +1,7 @@
 import { Outlet } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Sparkles, ShieldCheck, LineChart, FileSearch } from "lucide-react";
+import { ThemeToggle } from "../ui/ThemeToggle";
 
 const highlights = [
   { icon: LineChart, text: "AI-scored exam quality across every course you teach" },
@@ -46,7 +47,10 @@ export default function AuthShell() {
         <div className="pointer-events-none absolute -bottom-32 -left-16 h-72 w-72 rounded-full bg-primary-700/30 blur-3xl" />
       </div>
 
-      <div className="flex w-full items-center justify-center px-6 py-12 lg:w-1/2">
+      <div className="relative flex w-full items-center justify-center px-6 py-12 lg:w-1/2">
+        <div className="absolute right-6 top-6">
+          <ThemeToggle variant="icon" />
+        </div>
         <div className="w-full max-w-sm">
           <Outlet />
         </div>

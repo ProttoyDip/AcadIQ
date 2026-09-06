@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { authService } from "../services/auth.service";
-import { registerSchema, loginSchema } from "../validators/auth.validator";
+import { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema } from "../validators/auth.validator";
 import { success } from "../utils/apiResponse";
 
 export const authController = {
@@ -18,6 +18,26 @@ export const authController = {
     try {
       const input = loginSchema.parse(req.body);
       const result = await authService.login(input);
+      return success(res, result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async forgotPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const input = forgotPasswordSchema.parse(req.body);
+      const result = await authService.forgotPassword(input);
+      return success(res, result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async resetPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const input = resetPasswordSchema.parse(req.body);
+      const result = await authService.resetPassword(input);
       return success(res, result);
     } catch (err) {
       next(err);

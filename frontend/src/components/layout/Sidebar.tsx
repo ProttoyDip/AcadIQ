@@ -3,12 +3,12 @@ import {
   LayoutDashboard,
   GraduationCap,
   UploadCloud,
-  FileSearch2,
   Settings as SettingsIcon,
   ChevronsLeft,
   ChevronsRight,
   Sparkles,
   History,
+  BrainCircuit,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useUiStore } from "../../store/uiStore";
@@ -17,6 +17,7 @@ const links = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/courses", label: "Courses", icon: GraduationCap },
   { to: "/upload", label: "Upload & Analyze", icon: UploadCloud },
+  { to: "/dual-evaluate", label: "Dual LLM Evaluator", icon: BrainCircuit },
   { to: "/question-memory", label: "Academic Memory", icon: History },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
