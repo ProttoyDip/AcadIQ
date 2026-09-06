@@ -22,3 +22,8 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export function apiErrorMessage(error: unknown, fallback = "Something went wrong"): string {
+  const err = error as any;
+  return err?.response?.data?.error?.message ?? fallback;
+}
