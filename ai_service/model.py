@@ -3,7 +3,7 @@ import torch
 import transformers
 from typing import List, Dict, Any, Optional
 
-MODEL_ID = os.getenv("MODEL_ID", "meta-llama/Meta-Llama-3.1-8B-Instruct")
+MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen2.5-7B-Instruct")
 HF_TOKEN = os.getenv("HF_TOKEN", None)
 
 class LlamaModelWrapper:

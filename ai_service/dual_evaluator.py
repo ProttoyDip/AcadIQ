@@ -1,8 +1,8 @@
 import json
 from typing import Dict, Any, List
-from model import llama_runner
-from gemma_runner import gemma_runner
 from qwen_runner import qwen_runner
+from phi_runner import phi_runner
+from mistral_runner import mistral_runner
 from llora_runner import llora_runner
 
 EVALUATION_SYSTEM_PROMPT = """
@@ -89,33 +89,33 @@ Evaluate the student's answer and return the JSON evaluation object.
         {"role": "user", "content": user_prompt},
     ]
 
-    # 1. Model 1: Llama 3.1 8B Evaluation
-    llama_raw = llama_runner.generate(messages, max_new_tokens=512, temperature=0.1)
-    llama_eval = parse_json_response(llama_raw, max_marks)
-
-    # 2. Model 2: Google Gemma Instruct Evaluation
-    gemma_raw = gemma_runner.generate(messages, max_new_tokens=512, temperature=0.1)
-    gemma_eval = parse_json_response(gemma_raw, max_marks)
-
-    # 3. Model 3: Qwen Evaluation
+    # 1. Model 1: Qwen 2.5 7B Instruct Evaluation (Top Open Model for JSON & Rubric Scoring)
     qwen_raw = qwen_runner.generate(messages, max_new_tokens=512, temperature=0.1)
     qwen_eval = parse_json_response(qwen_raw, max_marks)
 
-    # 4. Model 4: LLoRA 7B Fine-Tuned Evaluation
+    # 2. Model 2: Microsoft Phi-3.5 Mini Instruct Evaluation (High Reasoning, Open MIT License)
+    phi_raw = phi_runner.generate(messages, max_new_tokens=512, temperature=0.1)
+    phi_eval = parse_json_response(phi_raw, max_marks)
+
+    # 3. Model 3: Mistral 7B Instruct v0.3 Evaluation (Fast & Open Access)
+    mistral_raw = mistral_runner.generate(messages, max_new_tokens=512, temperature=0.1)
+    mistral_eval = parse_json_response(mistral_raw, max_marks)
+
+    # 4. Model 4: LLoRA 7B Fine-Tuned Evaluation (Domain Specific Academic Grader)
     llora_raw = llora_runner.generate(messages, max_new_tokens=512, temperature=0.1)
     llora_eval = parse_json_response(llora_raw, max_marks)
 
-    # 5. 4-Model Jury Consensus Logic
-    final_ca = round((llama_eval["conceptual_accuracy"] + gemma_eval["conceptual_accuracy"] + qwen_eval["conceptual_accuracy"] + llora_eval["conceptual_accuracy"]) / 4.0, 2)
-    final_comp = round((llama_eval["completeness"] + gemma_eval["completeness"] + qwen_eval["completeness"] + llora_eval["completeness"]) / 4.0, 2)
-    final_cla = round((llama_eval["clarity"] + gemma_eval["clarity"] + qwen_eval["clarity"] + llora_eval["clarity"]) / 4.0, 2)
-    final_term = round((llama_eval["terminology"] + gemma_eval["terminology"] + qwen_eval["terminology"] + llora_eval["terminology"]) / 4.0, 2)
+    # 5. 4-Model Open Jury Consensus Logic
+    final_ca = round((qwen_eval["conceptual_accuracy"] + phi_eval["conceptual_accuracy"] + mistral_eval["conceptual_accuracy"] + llora_eval["conceptual_accuracy"]) / 4.0, 2)
+    final_comp = round((qwen_eval["completeness"] + phi_eval["completeness"] + mistral_eval["completeness"] + llora_eval["completeness"]) / 4.0, 2)
+    final_cla = round((qwen_eval["clarity"] + phi_eval["clarity"] + mistral_eval["clarity"] + llora_eval["clarity"]) / 4.0, 2)
+    final_term = round((qwen_eval["terminology"] + phi_eval["terminology"] + mistral_eval["terminology"] + llora_eval["terminology"]) / 4.0, 2)
 
     consensus_rubric_score = round(final_ca * 0.40 + final_comp * 0.30 + final_cla * 0.15 + final_term * 0.15, 2)
-    consensus_marks = round((llama_eval["assigned_marks"] + gemma_eval["assigned_marks"] + qwen_eval["assigned_marks"] + llora_eval["assigned_marks"]) / 4.0, 2)
+    consensus_marks = round((qwen_eval["assigned_marks"] + phi_eval["assigned_marks"] + mistral_eval["assigned_marks"] + llora_eval["assigned_marks"]) / 4.0, 2)
 
     # Variance across 4 models
-    marks_list = [llama_eval["assigned_marks"], gemma_eval["assigned_marks"], qwen_eval["assigned_marks"], llora_eval["assigned_marks"]]
+    marks_list = [qwen_eval["assigned_marks"], phi_eval["assigned_marks"], mistral_eval["assigned_marks"], llora_eval["assigned_marks"]]
     mark_range = max(marks_list) - min(marks_list)
     variance_percentage = round((mark_range / max_marks) * 100.0, 1) if max_marks > 0 else 0.0
     has_high_discrepancy = variance_percentage > 20.0
@@ -140,38 +140,14 @@ Evaluate the student's answer and return the JSON evaluation object.
             "jury_confidence": jury_confidence,
             "has_high_discrepancy": has_high_discrepancy,
             "recommendation": (
-                "Variance detected among the 4 LLM jury models. Faculty sign-off recommended."
+                "Variance detected among the 4 open LLM jury models. Faculty sign-off recommended."
                 if has_high_discrepancy
-                else f"High 4-model jury consensus ({jury_confidence}% confidence across Llama 3.1, Gemma, Qwen & LLoRA 7B)."
+                else f"High open 4-model jury consensus ({jury_confidence}% confidence across Qwen 2.5, Phi 3.5, Mistral & LLoRA 7B)."
             ),
         },
         "models": {
-            "llama_3_1": {
-                "name": "Meta-Llama-3.1-8B-Instruct",
-                "assigned_marks": llama_eval["assigned_marks"],
-                "rubric_score": llama_eval["rubric_overall_score"],
-                "rubric_breakdown": {
-                    "conceptual_accuracy": llama_eval["conceptual_accuracy"],
-                    "completeness": llama_eval["completeness"],
-                    "clarity": llama_eval["clarity"],
-                    "terminology": llama_eval["terminology"],
-                },
-                "feedback": llama_eval["feedback"],
-            },
-            "gemma": {
-                "name": "Google Gemma Instruct",
-                "assigned_marks": gemma_eval["assigned_marks"],
-                "rubric_score": gemma_eval["rubric_overall_score"],
-                "rubric_breakdown": {
-                    "conceptual_accuracy": gemma_eval["conceptual_accuracy"],
-                    "completeness": gemma_eval["completeness"],
-                    "clarity": gemma_eval["clarity"],
-                    "terminology": gemma_eval["terminology"],
-                },
-                "feedback": gemma_eval["feedback"],
-            },
-            "qwen": {
-                "name": "Qwen-2.5-7B / Qwen3-GGUF",
+            "qwen_2_5": {
+                "name": "Qwen/Qwen2.5-7B-Instruct",
                 "assigned_marks": qwen_eval["assigned_marks"],
                 "rubric_score": qwen_eval["rubric_overall_score"],
                 "rubric_breakdown": {
@@ -181,6 +157,30 @@ Evaluate the student's answer and return the JSON evaluation object.
                     "terminology": qwen_eval["terminology"],
                 },
                 "feedback": qwen_eval["feedback"],
+            },
+            "phi_3_5": {
+                "name": "microsoft/Phi-3.5-mini-instruct",
+                "assigned_marks": phi_eval["assigned_marks"],
+                "rubric_score": phi_eval["rubric_overall_score"],
+                "rubric_breakdown": {
+                    "conceptual_accuracy": phi_eval["conceptual_accuracy"],
+                    "completeness": phi_eval["completeness"],
+                    "clarity": phi_eval["clarity"],
+                    "terminology": phi_eval["terminology"],
+                },
+                "feedback": phi_eval["feedback"],
+            },
+            "mistral_7b": {
+                "name": "mistralai/Mistral-7B-Instruct-v0.3",
+                "assigned_marks": mistral_eval["assigned_marks"],
+                "rubric_score": mistral_eval["rubric_overall_score"],
+                "rubric_breakdown": {
+                    "conceptual_accuracy": mistral_eval["conceptual_accuracy"],
+                    "completeness": mistral_eval["completeness"],
+                    "clarity": mistral_eval["clarity"],
+                    "terminology": mistral_eval["terminology"],
+                },
+                "feedback": mistral_eval["feedback"],
             },
             "llora_7b": {
                 "name": "Arindamdas70/llora7B-finetuned",

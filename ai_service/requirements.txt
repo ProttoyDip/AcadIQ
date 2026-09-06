@@ -1,3 +1,4 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.1
 torch
@@ -6,3 +7,4 @@ accelerate>=0.32.0
 pydantic>=2.7.0
 huggingface_hub>=0.23.0
 python-dotenv>=1.0.0
+

@@ -13,7 +13,7 @@ load_dotenv()
 
 app = FastAPI(
     title="AcadIQ AI Microservice",
-    description="FastAPI service serving Llama-3.1-8B-Instruct and Qwen for AcadIQ",
+    description="FastAPI service serving Open-Access Evaluation Models (Qwen 2.5, Phi 3.5, Mistral & LLoRA 7B) for AcadIQ",
     version="1.0.0",
 )
 
