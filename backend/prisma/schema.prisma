@@ -1,0 +1,136 @@
+// AcadIQ database schema
+// Run `npm run prisma:migrate` inside backend/ to apply migrations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  FACULTY
+}
+
+enum ReportType {
+  EXAM_QUALITY
+  SYLLABUS_COVERAGE
+  QUESTION_SIMILARITY
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model User {
+  id             Int             @id @default(autoincrement())
+  name           String
+  email          String          @unique
+  password       String
+  role           Role            @default(FACULTY)
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  facultyProfile FacultyProfile?
+  courses        Course[]
+  reports        AnalysisReport[]
+
+  @@map("users")
+}
+
+model FacultyProfile {
+  id          Int    @id @default(autoincrement())
+  userId      Int    @unique @map("user_id")
+  department  String
+  designation String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("faculty_profiles")
+}
+
+model Course {
+  id          Int      @id @default(autoincrement())
+  facultyId   Int      @map("faculty_id")
+  courseCode  String   @map("course_code")
+  courseName  String   @map("course_name")
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  faculty           User                @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  syllabusDocuments SyllabusDocument[]
+  questionPapers    QuestionPaper[]
+
+  @@index([facultyId])
+  @@map("courses")
+}
+
+model SyllabusDocument {
+  id         Int      @id @default(autoincrement())
+  courseId   Int      @map("course_id")
+  filePath   String   @map("file_path")
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+  @@map("syllabus_documents")
+}
+
+model QuestionPaper {
+  id       Int    @id @default(autoincrement())
+  courseId Int    @map("course_id")
+  year     Int
+  semester String
+  filePath String @map("file_path")
+
+  course    Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions Question[]
+
+  @@index([courseId])
+  @@map("question_papers")
+}
+
+model Question {
+  id           Int     @id @default(autoincrement())
+  paperId      Int     @map("paper_id")
+  questionText String  @map("question_text") @db.Text
+  marks        Int
+  topic        String?
+  bloomLevel   String? @map("bloom_level")
+
+  paper QuestionPaper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+
+  @@index([paperId])
+  @@map("questions")
+}
+
+model AnalysisReport {
+  id         Int        @id @default(autoincrement())
+  facultyId  Int        @map("faculty_id")
+  reportType ReportType @map("report_type")
+  resultJson Json       @map("result_json")
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  faculty         User             @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  recommendations Recommendation[]
+
+  @@index([facultyId])
+  @@map("analysis_reports")
+}
+
+model Recommendation {
+  id       Int      @id @default(autoincrement())
+  reportId Int      @map("report_id")
+  message  String   @db.Text
+  priority Priority @default(MEDIUM)
+
+  report AnalysisReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("recommendations")
+}
