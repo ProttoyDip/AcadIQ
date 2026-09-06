@@ -6,11 +6,12 @@ import { AppError } from "../../middleware/error.middleware";
 
 export async function runExamAnalysisPipeline(
   syllabusText: string,
-  questionsText: string
+  questionsText: string,
+  courseOutcomes: Array<{ code: string; description: string }>
 ): Promise<ExamQualityResult> {
   const raw = await callLlmJson<unknown>(
     EXAM_ANALYSIS_SYSTEM_PROMPT,
-    buildExamAnalysisUserPrompt(syllabusText, questionsText)
+    buildExamAnalysisUserPrompt(syllabusText, questionsText, courseOutcomes)
   );
 
   const parsed = examQualityResponseSchema.safeParse(raw);

@@ -25,12 +25,17 @@ export const courseRepository = {
             questions: true,
           },
         },
+        courseOutcomes: { orderBy: { code: "asc" } },
       },
     });
   },
 
   findOwnedById(id: number, facultyId: number) {
     return prisma.course.findFirst({ where: { id, facultyId } });
+  },
+
+  findOutcomes(courseId: number) {
+    return prisma.courseOutcome.findMany({ where: { courseId }, orderBy: { code: "asc" } });
   },
 
   create(data: { facultyId: number; courseCode: string; courseName: string; description?: string }) {

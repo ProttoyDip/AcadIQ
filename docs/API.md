@@ -166,6 +166,28 @@ Runs the Question Similarity Detector between two papers of the same course. Res
 
 The `/analyze/*` paths remain backwards-compatible aliases.
 
+The exam response now also includes `qualityScore`, `coverage`, `difficulty`, `scoreFactors`, `positivePoints`, `issues`, and a decision/reason/confidence `explanation`. `overallScore`, `topicCoverage`, and `learningOutcomeAlignment` remain compatibility aliases.
+
+### `POST /memory/check`
+
+```json
+{ "courseId": 1, "questionPaperId": 4, "similarityThreshold": 40 }
+```
+
+Checks a stored paper against earlier questions from the course. Preview workflows may supply `newQuestions` and `historicalQuestions` directly. Returns `similarQuestions`, highest `similarityScore`, `replacementSuggestion`, `explanation`, and a persisted `reportId`. Every match includes its reason, confidence, and historical semester/year.
+
+### `POST /co/analyze`
+
+```json
+{
+  "courseId": 1,
+  "questionPaperId": 4,
+  "courseOutcomes": [{ "code": "CO1", "description": "Apply relational database design principles" }]
+}
+```
+
+Returns `questionCOMap`, per-outcome `coverage`, aggregate `coveragePercentage`, `missingOutcomes`, issues, recommendations, and an explanation. Outcomes and report-scoped mappings are persisted. `/analysis/co-mapping` remains available as an alias.
+
 ---
 
 ## Reports
@@ -174,7 +196,7 @@ The `/analyze/*` paths remain backwards-compatible aliases.
 List all analysis reports (with their recommendations) for the authenticated faculty member.
 
 ### `GET /reports/:id`
-Fetch one report with its recommendations. `404` if not found or not owned by the caller.
+Fetch one complete report with its JSON snapshot, recommendations, AI explanation, normalized exam score, and explained CO mappings. `404` if not found or not owned by the caller.
 
 ---
 

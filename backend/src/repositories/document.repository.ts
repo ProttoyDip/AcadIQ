@@ -39,6 +39,18 @@ export const documentRepository = {
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const paper = await tx.questionPaper.create({ data });
       await tx.question.createMany({ data: questions.map((question) => ({ ...question, paperId: paper.id })) });
+      const storedQuestions = await tx.question.findMany({ where: { paperId: paper.id } });
+      if (storedQuestions.length) {
+        await tx.questionHistory.createMany({
+          data: storedQuestions.map((question) => ({
+            courseId: data.courseId,
+            sourceQuestionId: question.id,
+            questionText: question.questionText,
+            semester: data.semester,
+            year: data.year,
+          })),
+        });
+      }
       return tx.questionPaper.findUniqueOrThrow({
         where: { id: paper.id },
         include: { questions: { orderBy: { sequenceNumber: "asc" } } },

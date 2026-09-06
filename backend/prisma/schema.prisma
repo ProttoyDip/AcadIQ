@@ -19,6 +19,7 @@ enum ReportType {
   QUESTION_SIMILARITY
   QUESTION_REVIEW
   CO_MAPPING
+  ACADEMIC_MEMORY
 }
 
 enum Priority {
@@ -67,6 +68,8 @@ model Course {
   questionPapers    QuestionPaper[]
   reports           AnalysisReport[]
   rubrics           Rubric[]
+  questionHistory   QuestionHistory[]
+  courseOutcomes    CourseOutcome[]
 
   @@unique([facultyId, courseCode])
   @@index([facultyId])
@@ -106,15 +109,17 @@ model QuestionPaper {
 }
 
 model Question {
-  id             Int             @id @default(autoincrement())
-  paperId        Int             @map("paper_id")
-  sequenceNumber Int             @map("sequence_number")
-  questionText   String          @map("question_text") @db.Text
-  marks          Int             @default(0)
-  topic          String?         @db.VarChar(191)
-  bloomLevel     String?         @map("bloom_level") @db.VarChar(30)
-  paper          QuestionPaper   @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  id             Int                 @id @default(autoincrement())
+  paperId        Int                 @map("paper_id")
+  sequenceNumber Int                 @map("sequence_number")
+  questionText   String              @map("question_text") @db.Text
+  marks          Int                 @default(0)
+  topic          String?             @db.VarChar(191)
+  bloomLevel     String?             @map("bloom_level") @db.VarChar(30)
+  paper          QuestionPaper       @relation(fields: [paperId], references: [id], onDelete: Cascade)
   studentAnswers StudentAnswer[]
+  coMappings     QuestionCOMapping[]
+  historyEntry   QuestionHistory?
 
   @@unique([paperId, sequenceNumber])
   @@index([paperId])
@@ -122,17 +127,20 @@ model Question {
 }
 
 model AnalysisReport {
-  id              Int              @id @default(autoincrement())
-  facultyId       Int              @map("faculty_id")
-  courseId        Int?             @map("course_id")
-  questionPaperId Int?             @map("question_paper_id")
-  reportType      ReportType       @map("report_type")
-  resultJson      Json             @map("result_json")
-  createdAt       DateTime         @default(now()) @map("created_at")
-  faculty         User             @relation(fields: [facultyId], references: [id], onDelete: Cascade)
-  course          Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
-  questionPaper   QuestionPaper?   @relation(fields: [questionPaperId], references: [id], onDelete: SetNull)
-  recommendations Recommendation[]
+  id               Int                 @id @default(autoincrement())
+  facultyId        Int                 @map("faculty_id")
+  courseId         Int?                @map("course_id")
+  questionPaperId  Int?                @map("question_paper_id")
+  reportType       ReportType          @map("report_type")
+  resultJson       Json                @map("result_json")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  faculty          User                @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  course           Course?             @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  questionPaper    QuestionPaper?      @relation(fields: [questionPaperId], references: [id], onDelete: SetNull)
+  recommendations  Recommendation[]
+  examQualityScore ExamQualityScore?
+  explanation      AIExplanation?
+  coMappings       QuestionCOMapping[]
 
   @@index([facultyId, createdAt])
   @@index([courseId])
@@ -150,6 +158,86 @@ model Recommendation {
 
   @@index([reportId])
   @@map("recommendations")
+}
+
+model ExamQualityScore {
+  id              Int            @id @default(autoincrement())
+  reportId        Int            @unique @map("report_id")
+  qualityScore    Decimal        @map("quality_score") @db.Decimal(5, 2)
+  scoreFactors    Json           @map("score_factors")
+  positivePoints  Json           @map("positive_points")
+  issues          Json
+  recommendations Json
+  confidenceScore Decimal        @map("confidence_score") @db.Decimal(5, 2)
+  createdAt       DateTime       @default(now()) @map("created_at")
+  report          AnalysisReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@map("exam_quality_scores")
+}
+
+model AIExplanation {
+  id         Int            @id @default(autoincrement())
+  reportId   Int            @unique @map("report_id")
+  module     String         @db.VarChar(50)
+  decision   String         @db.VarChar(191)
+  reason     String         @db.Text
+  confidence Decimal        @db.Decimal(5, 2)
+  createdAt  DateTime       @default(now()) @map("created_at")
+  report     AnalysisReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@map("ai_explanations")
+}
+
+model QuestionHistory {
+  id                 Int       @id @default(autoincrement())
+  courseId           Int       @map("course_id")
+  sourceQuestionId   Int?      @unique @map("source_question_id")
+  questionText       String    @map("question_text") @db.Text
+  semester           String    @db.VarChar(50)
+  year               Int
+  embeddingReference String?   @map("embedding_reference") @db.VarChar(500)
+  similarityScore    Decimal?  @map("similarity_score") @db.Decimal(5, 2)
+  createdAt          DateTime  @default(now()) @map("created_at")
+  course             Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  sourceQuestion     Question? @relation(fields: [sourceQuestionId], references: [id], onDelete: SetNull)
+
+  @@index([courseId, year, semester])
+  @@map("question_history")
+}
+
+model CourseOutcome {
+  id          Int                 @id @default(autoincrement())
+  courseId    Int                 @map("course_id")
+  code        String              @db.VarChar(30)
+  description String              @db.Text
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+  course      Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  mappings    QuestionCOMapping[]
+
+  @@unique([courseId, code])
+  @@index([courseId])
+  @@map("course_outcomes")
+}
+
+model QuestionCOMapping {
+  id              Int            @id @default(autoincrement())
+  reportId        Int            @map("report_id")
+  questionId      Int            @map("question_id")
+  courseOutcomeId Int            @map("course_outcome_id")
+  strength        String         @db.VarChar(30)
+  decision        String         @db.VarChar(191)
+  reason          String         @db.Text
+  confidence      Decimal        @db.Decimal(5, 2)
+  createdAt       DateTime       @default(now()) @map("created_at")
+  report          AnalysisReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  question        Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  courseOutcome   CourseOutcome  @relation(fields: [courseOutcomeId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, questionId, courseOutcomeId])
+  @@index([questionId])
+  @@index([courseOutcomeId])
+  @@map("question_co_mappings")
 }
 
 model Rubric {

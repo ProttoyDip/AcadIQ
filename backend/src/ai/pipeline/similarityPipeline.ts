@@ -18,5 +18,13 @@ export async function runSimilarityPipeline(
     throw new AppError("AI response failed validation", 502, parsed.error.flatten());
   }
 
+  const currentIds = new Set(currentQuestions.map((question) => question.id));
+  const previousIds = new Set(previousQuestions.map((question) => question.id));
+  if (parsed.data.matches.some((match) =>
+    !currentIds.has(match.currentQuestionId) || !previousIds.has(match.previousQuestionId)
+  )) {
+    throw new AppError("AI response referenced an unknown question", 502);
+  }
+
   return parsed.data;
 }

@@ -16,7 +16,7 @@ export const questionReviewService = {
     const result = await runQuestionReviewPipeline(
       selected.map((question) => ({ id: question.id, text: question.questionText, marks: Number(question.marks) }))
     );
-    const report = await reportRepository.createWithRecommendations(
+    const report = await reportRepository.createExplainable(
       {
         facultyId,
         courseId: input.courseId,
@@ -24,7 +24,8 @@ export const questionReviewService = {
         reportType: "QUESTION_REVIEW",
         resultJson: result,
       },
-      result.recommendations.map((item) => ({ message: item.message, priority: item.priority }))
+      result.recommendations.map((item) => ({ message: item.message, priority: item.priority })),
+      result.explanation
     );
     return { reportId: report.id, ...result };
   },
