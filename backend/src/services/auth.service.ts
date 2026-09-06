@@ -39,6 +39,18 @@ export const authService = {
         courseName: "Software Engineering",
         description: "Principles of software architecture, design patterns, and agile methodologies.",
       });
+      await courseRepository.create({
+        facultyId: user.id,
+        courseCode: "CSE 3101",
+        courseName: "Database Systems",
+        description: "Core computer science course covering relational databases, SQL, ER modeling, normalization, and transaction processing.",
+      });
+      await courseRepository.create({
+        facultyId: user.id,
+        courseCode: "CSE 3201",
+        courseName: "Operating Systems",
+        description: "Core computer science course covering process management, CPU scheduling, memory management, file systems, and concurrency.",
+      });
     } catch (err) {
       // Ignore if default courses cannot be seeded
     }
