@@ -22,7 +22,15 @@ export const courseRepository = {
             mimeType: true,
             fileSize: true,
             uploadedAt: true,
-            questions: true,
+            questions: {
+              include: {
+                coMappings: {
+                  include: {
+                    courseOutcome: true,
+                  },
+                },
+              },
+            },
           },
         },
         courseOutcomes: { orderBy: { code: "asc" } },

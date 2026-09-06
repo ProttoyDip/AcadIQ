@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { seedDatasets } from "../src/database/seedDatasets";
 
 const prisma = new PrismaClient();
 
@@ -52,100 +53,11 @@ async function seed() {
         },
       });
     }
-
-    // Seed BeSTRaP DBMS Course & Question Papers
-    const dbmsCourse = await prisma.course.upsert({
-      where: {
-        facultyId_courseCode: {
-          facultyId: user.id,
-          courseCode: "CSE301",
-        },
-      },
-      update: {
-        courseName: "Database Systems & Transactions (BeSTRaP Dataset)",
-        description:
-          "Course based on Beni-Suef University BeSTRaP Dataset (doi:10.3390/data11030057) covering Database Transaction Processing, Concurrency Control, Serializability, SQL, Normalization, and Crash Recovery.",
-      },
-      create: {
-        facultyId: user.id,
-        courseCode: "CSE301",
-        courseName: "Database Systems & Transactions (BeSTRaP Dataset)",
-        description:
-          "Course based on Beni-Suef University BeSTRaP Dataset (doi:10.3390/data11030057) covering Database Transaction Processing, Concurrency Control, Serializability, SQL, Normalization, and Crash Recovery.",
-      },
-    });
-
-    const dbmsCOs = [
-      { code: "CO1", description: "Understand transaction processing fundamentals, ACID properties, and execution schedules." },
-      { code: "CO2", description: "Analyze serializability and concurrency control protocols including 2PL and Timestamp Ordering." },
-      { code: "CO3", description: "Evaluate crash recovery mechanisms (ARIES, WAL) and index structures for database performance." },
-      { code: "CO4", description: "Apply normalization theory to decompose relational schemas up to 3NF and BCNF." },
-    ];
-
-    for (const co of dbmsCOs) {
-      await prisma.courseOutcome.upsert({
-        where: {
-          courseId_code: {
-            courseId: dbmsCourse.id,
-            code: co.code,
-          },
-        },
-        update: { description: co.description },
-        create: {
-          courseId: dbmsCourse.id,
-          code: co.code,
-          description: co.description,
-        },
-      });
-    }
-
-    // Seed OS Course & Question Papers
-    const osCourse = await prisma.course.upsert({
-      where: {
-        facultyId_courseCode: {
-          facultyId: user.id,
-          courseCode: "CSE302",
-        },
-      },
-      update: {
-        courseName: "Operating Systems (CityU HK Dataset)",
-        description:
-          "Course based on City University of Hong Kong OS Open Dataset (arXiv:2405.19694) covering Process Management, CPU Scheduling, Semaphores, Memory Management, Page Replacement, and File Systems.",
-      },
-      create: {
-        facultyId: user.id,
-        courseCode: "CSE302",
-        courseName: "Operating Systems (CityU HK Dataset)",
-        description:
-          "Course based on City University of Hong Kong OS Open Dataset (arXiv:2405.19694) covering Process Management, CPU Scheduling, Semaphores, Memory Management, Page Replacement, and File Systems.",
-      },
-    });
-
-    const osCOs = [
-      { code: "CO1", description: "Analyze process scheduling algorithms, turn-around times, and context switching." },
-      { code: "CO2", description: "Evaluate virtual memory architectures, paging, and page replacement algorithms." },
-      { code: "CO3", description: "Apply POSIX semaphores, mutexes, and locks to prevent race conditions and deadlocks." },
-      { code: "CO4", description: "Understand file system allocation schemes (Inodes), disk scheduling, and I/O management." },
-    ];
-
-    for (const co of osCOs) {
-      await prisma.courseOutcome.upsert({
-        where: {
-          courseId_code: {
-            courseId: osCourse.id,
-            code: co.code,
-          },
-        },
-        update: { description: co.description },
-        create: {
-          courseId: osCourse.id,
-          code: co.code,
-          description: co.description,
-        },
-      });
-    }
   }
-  console.log(`Seeded default courses and datasets for ${users.length} faculty users.`);
+  console.log(`Seeded default courses for ${users.length} faculty users.`);
+
+  // Seed datasets with Question CO Mappings and Recommendations
+  await seedDatasets();
 }
 
 seed()

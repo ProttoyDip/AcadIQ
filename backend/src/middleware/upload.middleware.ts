@@ -26,3 +26,35 @@ export const uploadPdf = multer({
     cb(null, true);
   },
 });
+
+const ALLOWED_SCHEME_MIMES = new Set([
+  "application/pdf",
+  "text/plain",
+  "text/markdown",
+  "application/octet-stream",
+]);
+
+const schemeStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || ".pdf";
+    cb(null, `${randomUUID()}${ext}`);
+  },
+});
+
+export const uploadReferenceScheme = multer({
+  storage: schemeStorage,
+  limits: { fileSize: MAX_FILE_SIZE_BYTES },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (
+      ALLOWED_SCHEME_MIMES.has(file.mimetype) ||
+      [".pdf", ".txt", ".md"].includes(ext)
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only PDF or text files (.pdf, .txt, .md) are allowed as marking schemes"));
+    }
+  },
+});
+

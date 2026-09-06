@@ -2,6 +2,8 @@ import { Router } from "express";
 import { analysisController } from "../controllers/analysis.controller";
 import { authenticate } from "../middleware/auth.middleware";
 
+import { uploadReferenceScheme } from "../middleware/upload.middleware";
+
 const router = Router();
 
 router.use(authenticate);
@@ -10,7 +12,20 @@ router.post("/syllabus", analysisController.analyzeSyllabus);
 router.post("/similarity", analysisController.analyzeSimilarity);
 router.post("/question-review", analysisController.reviewQuestions);
 router.post("/co-mapping", analysisController.mapCourseOutcomes);
-router.post("/dual-evaluate", analysisController.dualEvaluate);
+router.post(
+  "/dual-evaluate",
+  (req, res, next) => {
+    uploadReferenceScheme.any()(req, res, (err) => {
+      if (err) return next(err);
+      if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+        req.file = req.files[0];
+      }
+      next();
+    });
+  },
+  analysisController.dualEvaluate
+);
+
 
 export default router;
 

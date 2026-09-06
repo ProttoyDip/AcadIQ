@@ -102,6 +102,7 @@ Return JSON in this format:
       question: input.question,
       max_marks: maxMarks,
       student_answer: input.studentAnswer,
+      reference_answer: input.modelAnswer,
       consensus: {
         assigned_marks: assignedMarks,
         percentage: Number(((assignedMarks / maxMarks) * 100).toFixed(1)),
