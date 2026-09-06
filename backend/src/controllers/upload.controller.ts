@@ -22,7 +22,7 @@ function hideStoragePath<T extends { filePath: string }>(record: T): Omit<T, "fi
 export const uploadController = {
   async upload(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      if (!req.file) throw new AppError("A PDF file is required", 400);
+      if (!req.file) throw new AppError("A PDF file or DOCX file is required", 400);
       const input = documentUploadSchema.parse(req.body);
       const result = input.documentType === "SYLLABUS"
         ? await uploadService.uploadSyllabus(req.user!.userId, input.courseId, req.file)
@@ -42,7 +42,7 @@ export const uploadController = {
 
   async uploadSyllabus(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      if (!req.file) throw new AppError("A PDF file is required", 400);
+      if (!req.file) throw new AppError("A PDF file or DOCX file is required", 400);
       const input = syllabusUploadSchema.parse(req.body);
       const doc = await uploadService.uploadSyllabus(req.user!.userId, input.courseId, req.file);
       return success(res, hideStoragePath(doc), 201);
@@ -54,7 +54,7 @@ export const uploadController = {
 
   async uploadQuestionPaper(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      if (!req.file) throw new AppError("A PDF file is required", 400);
+      if (!req.file) throw new AppError("A PDF file or DOCX file is required", 400);
       const input = questionPaperUploadSchema.parse(req.body);
       const paper = await uploadService.uploadQuestionPaper(
         req.user!.userId,

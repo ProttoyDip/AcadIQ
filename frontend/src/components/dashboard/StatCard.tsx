@@ -11,42 +11,38 @@ interface StatCardProps {
   index?: number;
 }
 
-export default function StatCard({ label, value, icon: Icon, trend, index = 0 }: StatCardProps) {
+export default function StatCard({ label, value, icon: Icon, trend }: StatCardProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.05 }}
-    >
-      <Card>
-        <CardContent className="pt-5">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-small font-medium text-muted-foreground">{label}</p>
-              <p className="mt-2 text-heading font-bold tracking-tight text-foreground">{value}</p>
-            </div>
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50">
-              <Icon className="h-5 w-5 text-primary-700" strokeWidth={1.75} />
-            </div>
+    <Card className="hover:border-primary-200 dark:hover:border-primary-800 transition-colors shadow-xs">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{label}</p>
+            <p className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-foreground tabular-nums">{value}</p>
           </div>
-          {trend && (
-            <div
-              className={cn(
-                "mt-3 inline-flex items-center gap-1 text-xs font-medium",
-                trend.positive === false ? "text-error" : "text-success"
-              )}
-            >
-              {trend.direction === "up" ? (
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              ) : (
-                <ArrowDownRight className="h-3.5 w-3.5" />
-              )}
-              <span>{trend.value}</span>
-              <span className="font-normal text-muted-foreground">vs last semester</span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </motion.div>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 dark:bg-primary-950/60 border border-primary-100 dark:border-primary-800/80">
+            <Icon className="h-5 w-5 text-primary-700 dark:text-primary-300" strokeWidth={1.75} />
+          </div>
+        </div>
+        {trend && (
+          <div
+            className={cn(
+              "mt-3 inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full",
+              trend.positive === false
+                ? "bg-error-bg text-error border border-error-border"
+                : "bg-success-bg text-success border border-success-border"
+            )}
+          >
+            {trend.direction === "up" ? (
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            ) : (
+              <ArrowDownRight className="h-3.5 w-3.5" />
+            )}
+            <span className="font-semibold tabular-nums">{trend.value}</span>
+            <span className="text-muted-foreground ml-0.5">vs last semester</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

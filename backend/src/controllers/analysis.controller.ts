@@ -8,6 +8,7 @@ import {
   analyzeSimilaritySchema,
   questionReviewSchema,
   coMappingSchema,
+  dualEvaluationSchema,
 } from "../validators/analysis.validator";
 import { success } from "../utils/apiResponse";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
@@ -66,10 +67,10 @@ export const analysisController = {
 
   async dualEvaluate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const { question, maxMarks, modelAnswer, studentAnswer } = req.body;
+      const { question, maxMarks, modelAnswer, studentAnswer } = dualEvaluationSchema.parse(req.body);
       const result = await dualEvaluationService.evaluate(String(req.user!.userId), {
         question,
-        maxMarks: Number(maxMarks) || 10,
+        maxMarks,
         modelAnswer,
         studentAnswer,
       });

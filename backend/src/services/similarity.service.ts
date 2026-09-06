@@ -5,6 +5,8 @@ import { runSimilarityPipeline } from "../ai/pipeline/similarityPipeline";
 import { AppError } from "../middleware/error.middleware";
 import { AnalyzeSimilarityInput } from "../validators/analysis.validator";
 import { courseRepository } from "../repositories/course.repository";
+import { loadReliabilityEvidence } from "./analysisContext.service";
+import { withDecisionContract } from "../ai/confidence";
 
 export const similarityService = {
   async analyze(facultyId: number, input: AnalyzeSimilarityInput) {
@@ -22,11 +24,23 @@ export const similarityService = {
 
     const currentQuestions = await questionRepository.findByPaperId(currentPaper.id);
     const previousQuestions = await questionRepository.findByPaperId(previousPaper.id);
+    const evidence = await loadReliabilityEvidence(input.courseId, {
+      sourceTexts: currentQuestions.map((question) => question.questionText),
+      analyzedQuestionCount: currentQuestions.length + previousQuestions.length,
+      excludedQuestionIds: currentQuestions.map((question) => question.id),
+      historicalQuestions: previousQuestions.map((question) => ({
+        text: question.questionText,
+        semester: previousPaper.semester,
+        year: previousPaper.year,
+      })),
+    });
 
     const result = await runSimilarityPipeline(
       currentQuestions.map((q) => ({ id: q.id, text: q.questionText })),
-      previousQuestions.map((q) => ({ id: q.id, text: q.questionText }))
+      previousQuestions.map((q) => ({ id: q.id, text: q.questionText })),
+      evidence
     );
+    const completeResult = withDecisionContract(result);
 
     const report = await reportRepository.createExplainable(
       {
@@ -34,12 +48,12 @@ export const similarityService = {
         courseId: input.courseId,
         questionPaperId: currentPaper.id,
         reportType: "QUESTION_SIMILARITY",
-        resultJson: result,
+        resultJson: completeResult,
       },
       [{ message: result.recommendation, priority: "MEDIUM" }],
       result.explanation
     );
 
-    return { reportId: report.id, ...result };
+    return { reportId: report.id, ...completeResult };
   },
 };

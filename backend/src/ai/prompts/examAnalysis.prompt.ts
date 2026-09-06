@@ -18,7 +18,7 @@ Return STRICT JSON matching this shape:
   "recommendations": [{"message": string, "priority": "LOW"|"MEDIUM"|"HIGH"}],
   "explanation": {"decision": string, "reason": string, "confidence": number (0-100)}
 }
-Score-factor weights must total 100 and qualityScore must be their weighted score (within normal rounding). Explain every factor and issue using evidence from the supplied materials. Do not include text outside JSON.`;
+Score-factor weights must total 100 and qualityScore must be their weighted score (within normal rounding). The explanation is mandatory and must always contain decision, reason, and confidence. Confidence is recalculated by the server from source availability; never describe it as random or subjective. Explain every factor and issue using evidence from the supplied materials. Do not include text outside JSON.`;
 
 export function buildExamAnalysisUserPrompt(
   syllabusText: string,

@@ -7,6 +7,8 @@ import reportRoutes from "./report.routes";
 import documentRoutes from "./document.routes";
 import memoryRoutes from "./memory.routes";
 import coRoutes from "./co.routes";
+import adminRoutes from "./admin.routes";
+import copilotRoutes from "./copilot.routes";
 
 const router = Router();
 
@@ -19,5 +21,7 @@ router.use("/analyze", analysisRoutes); // backwards-compatible frontend alias
 router.use("/reports", reportRoutes);
 router.use("/memory", memoryRoutes);
 router.use("/co", coRoutes);
+router.use("/admin", adminRoutes);
+router.use("/copilot", copilotRoutes);
 
 export default router;

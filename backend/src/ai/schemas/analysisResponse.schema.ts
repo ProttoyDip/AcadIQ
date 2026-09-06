@@ -9,7 +9,7 @@ export const explanationSchema = z.object({
   decision: nonEmpty.max(191),
   reason: nonEmpty,
   confidence: score,
-});
+}).strict();
 
 export const examQualityResponseSchema = z.object({
   qualityScore: score,
@@ -44,7 +44,7 @@ export const examQualityResponseSchema = z.object({
   issues: z.array(z.object({ severity: priority, message: nonEmpty, reason: nonEmpty })),
   recommendations: z.array(z.object({ message: nonEmpty, priority })),
   explanation: explanationSchema,
-}).superRefine((value, context) => {
+}).strict().superRefine((value, context) => {
   const totalWeight = value.scoreFactors.reduce((sum, factor) => sum + factor.weight, 0);
   if (Math.abs(totalWeight - 100) > 1) {
     context.addIssue({
@@ -73,7 +73,7 @@ export const syllabusCoverageResponseSchema = z.object({
   overusedTopics: z.array(z.object({ topic: nonEmpty, occurrences: z.number().int().min(1) })),
   coveragePercentage: score,
   explanation: explanationSchema,
-});
+}).strict();
 
 export const questionSimilarityResponseSchema = z.object({
   matches: z.array(z.object({
@@ -87,7 +87,7 @@ export const questionSimilarityResponseSchema = z.object({
   overallDuplicationPercentage: score,
   recommendation: nonEmpty,
   explanation: explanationSchema,
-});
+}).strict();
 
 export const academicMemoryResponseSchema = z.object({
   similarQuestions: z.array(z.object({
@@ -101,7 +101,7 @@ export const academicMemoryResponseSchema = z.object({
   similarityScore: score,
   replacementSuggestion: nonEmpty,
   explanation: explanationSchema,
-});
+}).strict();
 
 export const questionReviewResponseSchema = z.object({
   qualityScore: score,
@@ -109,6 +109,9 @@ export const questionReviewResponseSchema = z.object({
     questionId: z.number().int().positive(),
     clarityScore: score,
     bloomLevel,
+    decision: nonEmpty.max(191),
+    reason: nonEmpty,
+    confidence: score,
     issues: z.array(nonEmpty),
     suggestedRewrite: nonEmpty.optional(),
   })),
@@ -119,7 +122,7 @@ export const questionReviewResponseSchema = z.object({
   })),
   recommendations: z.array(z.object({ message: nonEmpty, priority })),
   explanation: explanationSchema,
-});
+}).strict();
 
 export const coMappingResponseSchema = z.object({
   qualityScore: score,
@@ -139,4 +142,4 @@ export const coMappingResponseSchema = z.object({
   issues: z.array(z.object({ severity: priority, message: nonEmpty })),
   recommendations: z.array(z.object({ message: nonEmpty, priority })),
   explanation: explanationSchema,
-});
+}).strict();

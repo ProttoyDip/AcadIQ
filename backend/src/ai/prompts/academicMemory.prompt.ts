@@ -7,7 +7,7 @@ Return STRICT JSON:
   "replacementSuggestion": string,
   "explanation": {"decision": string, "reason": string, "confidence": number}
 }
-All score and confidence values are 0-100. similarityScore is the highest detected similarity, or 0 when there are no matches. Include only matches at or above the requested threshold. Explain shared concepts, wording, or assessment patterns and suggest a concrete replacement direction. Output JSON only.`;
+All score and confidence values are 0-100. Every match and the overall response must contain a decision outcome, evidence-based reason, and confidence through the documented fields. Confidence is recalculated by the server from source availability; never describe it as random or subjective. similarityScore is the highest detected similarity, or 0 when there are no matches. Include only matches at or above the requested threshold. Explain shared concepts, wording, or assessment patterns and suggest a concrete replacement direction. Output JSON only.`;
 
 export function buildAcademicMemoryPrompt(
   newQuestions: Array<{ id: number; text: string }>,

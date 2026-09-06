@@ -29,51 +29,56 @@ export default function RecentAnalysisList({ items }: { items: RecentReportItem[
   const recent = items.slice(0, 5);
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>Recent AI reports</CardTitle>
-        <Link to="/upload" className="text-small font-medium text-primary-700 hover:underline">
-          Analyze new document
+    <Card className="shadow-xs">
+      <CardHeader className="flex-row items-center justify-between space-y-0 pb-4">
+        <div>
+          <CardTitle className="text-base font-bold tracking-tight">Recent AI Quality Audits</CardTitle>
+          <p className="text-xs text-muted-foreground mt-0.5">Historical evaluations and compliance reports</p>
+        </div>
+        <Link
+          to="/upload"
+          className="text-xs font-semibold text-primary-700 dark:text-primary-400 hover:underline flex items-center gap-1"
+        >
+          Analyze new paper &rarr;
         </Link>
       </CardHeader>
       <CardContent>
         {recent.length === 0 ? (
           <EmptyState
             icon={GraduationCap}
-            title="No analyses yet"
-            description="Upload a syllabus and question paper to generate your first AI quality report."
+            title="No audit reports generated yet"
+            description="Upload a course syllabus and examination paper to run your initial AI quality assessment."
           />
         ) : (
-          <div className="flex flex-col divide-y divide-border">
-            {recent.map((item, i) => {
+          <div className="flex flex-col divide-y divide-border/60">
+            {recent.map((item) => {
               const Icon = reportIcon[item.reportType];
               const Row = (
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.25, delay: i * 0.04 }}
-                  className="-mx-2 flex items-center justify-between gap-4 rounded-md px-2 py-3.5 transition-colors first:pt-0 last:pb-0 hover:bg-muted/40"
+                <div
+                  className="-mx-2 flex items-center justify-between gap-4 rounded-lg px-3 py-3 transition-colors hover:bg-muted/50"
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary-50">
-                      <Icon className="h-4 w-4 text-primary-700" />
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 dark:bg-primary-950/60 border border-primary-100 dark:border-primary-900">
+                      <Icon className="h-4.5 w-4.5 text-primary-700 dark:text-primary-300" />
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-small font-medium text-foreground">{item.title}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="truncate text-sm font-semibold text-foreground tracking-tight">{item.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {item.meta} · {formatDate(item.createdAt)}
                       </p>
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
-                    <Badge variant={scoreTone(item.score)}>{Math.round(item.score)}%</Badge>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <Badge variant={scoreTone(item.score)} className="font-semibold tabular-nums text-xs">
+                      {Math.round(item.score)}% Score
+                    </Badge>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground/60" />
                   </div>
-                </motion.div>
+                </div>
               );
 
               return item.href ? (
-                <Link key={item.id} to={item.href}>
+                <Link key={item.id} to={item.href} className="block">
                   {Row}
                 </Link>
               ) : (

@@ -6,6 +6,8 @@ import { documentRepository } from "../repositories/document.repository";
 import { memoryRepository } from "../repositories/memory.repository";
 import { reportRepository } from "../repositories/report.repository";
 import { MemoryCheckInput } from "../validators/analysis.validator";
+import { applyCalculatedConfidence, withDecisionContract } from "../ai/confidence";
+import { loadReliabilityEvidence } from "./analysisContext.service";
 
 export const academicMemoryService = {
   async check(facultyId: number, input: MemoryCheckInput) {
@@ -41,17 +43,24 @@ export const academicMemoryService = {
       year: question.year,
     }));
 
+    const evidence = await loadReliabilityEvidence(input.courseId, {
+      sourceTexts: newQuestions.map((question) => question.text),
+      analyzedQuestionCount: newQuestions.length + historicalQuestions.length,
+      excludedQuestionIds: excludedIds,
+      historicalQuestions,
+    });
+
     const result: AcademicMemoryResult = historicalQuestions.length
-      ? await runAcademicMemoryPipeline(newQuestions, historicalQuestions, input.similarityThreshold)
+      ? await runAcademicMemoryPipeline(newQuestions, historicalQuestions, input.similarityThreshold, evidence)
       : {
           similarQuestions: [],
           similarityScore: 0,
-          replacementSuggestion: "No replacement is needed until historical questions are available for comparison.",
-          explanation: {
+          replacementSuggestion: "Replacement need cannot be assessed until historical questions are available for comparison.",
+          explanation: applyCalculatedConfidence({
             decision: "NO_HISTORY_AVAILABLE",
             reason: "The course has no earlier stored questions, so similarity cannot yet be assessed.",
-            confidence: 100,
-          },
+            confidence: 0,
+          }, evidence),
         };
 
     if (!input.historicalQuestions && result.similarQuestions.length) {
@@ -60,7 +69,7 @@ export const academicMemoryService = {
 
     const newQuestionById = new Map(newQuestions.map((question) => [question.id, question.text]));
     const historicalById = new Map(historicalQuestions.map((question) => [question.id, question]));
-    const completeResult = {
+    const completeResult = withDecisionContract({
       ...result,
       similarQuestions: result.similarQuestions.map((match) => ({
         ...match,
@@ -69,7 +78,7 @@ export const academicMemoryService = {
         semester: historicalById.get(match.historicalQuestionId)?.semester,
         year: historicalById.get(match.historicalQuestionId)?.year,
       })),
-    };
+    });
     const report = await reportRepository.createExplainable(
       {
         facultyId,

@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { reportController } from "../controllers/report.controller";
 import { authenticate } from "../middleware/auth.middleware";
+import { requireRole } from "../middleware/role.middleware";
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, requireRole("FACULTY"));
 router.get("/", reportController.list);
 router.get("/:id", reportController.getById);
 

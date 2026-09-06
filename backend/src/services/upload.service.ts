@@ -1,16 +1,16 @@
-import { extractPdfText } from "../ai/pdfTextExtractor";
+import { extractDocumentText } from "../ai/documentTextExtractor";
 import { extractQuestions } from "../ai/questionExtractor";
 import { AppError } from "../middleware/error.middleware";
 import { courseRepository } from "../repositories/course.repository";
 import { documentRepository } from "../repositories/document.repository";
-import { UploadedPdf } from "../validators/document.validator";
+import { UploadedDocument } from "../validators/document.validator";
 
 async function assertCourseOwnership(courseId: number, facultyId: number) {
   const course = await courseRepository.findOwnedById(courseId, facultyId);
   if (!course) throw new AppError("Course not found", 404);
 }
 
-function fileData(courseId: number, file: UploadedPdf) {
+function fileData(courseId: number, file: UploadedDocument) {
   return {
     courseId,
     filePath: file.path,
@@ -20,11 +20,19 @@ function fileData(courseId: number, file: UploadedPdf) {
   };
 }
 
+import { auditService } from "./audit.service";
+
 export const uploadService = {
-  async uploadSyllabus(facultyId: number, courseId: number, file: UploadedPdf) {
+  async uploadSyllabus(facultyId: number, courseId: number, file: UploadedDocument) {
     await assertCourseOwnership(courseId, facultyId);
-    await extractPdfText(file.path);
-    return documentRepository.createSyllabusDocument(fileData(courseId, file));
+    await extractDocumentText(file.path, file.mimetype);
+    const doc = await documentRepository.createSyllabusDocument(facultyId, fileData(courseId, file));
+    await auditService.recordAuditLog({
+      userId: facultyId,
+      action: "Faculty uploaded syllabus",
+      document: file.originalname,
+    });
+    return doc;
   },
 
   async uploadQuestionPaper(
@@ -32,16 +40,23 @@ export const uploadService = {
     courseId: number,
     year: number,
     semester: string,
-    file: UploadedPdf
+    file: UploadedDocument
   ) {
     await assertCourseOwnership(courseId, facultyId);
-    const questions = extractQuestions(await extractPdfText(file.path));
+    const questions = extractQuestions(await extractDocumentText(file.path, file.mimetype));
     if (questions.length > 500 || questions.some((question) => question.questionText.length > 60_000)) {
       throw new AppError("The question paper is too large to store safely", 413);
     }
-    return documentRepository.createQuestionPaperWithQuestions(
+    const paper = await documentRepository.createQuestionPaperWithQuestions(
+      facultyId,
       { ...fileData(courseId, file), year, semester },
       questions
     );
+    await auditService.recordAuditLog({
+      userId: facultyId,
+      action: "Faculty uploaded exam paper",
+      document: file.originalname,
+    });
+    return paper;
   },
 };

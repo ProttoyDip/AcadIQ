@@ -43,40 +43,48 @@ export default function ExplainableAIInsightCard({
   considered,
 }: ExplainableAIInsightCardProps) {
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary-50">
-            <Icon className="h-4 w-4 text-primary-700" />
+    <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-xs transition-colors hover:border-primary-200 dark:hover:border-primary-800">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 dark:bg-primary-950/60 border border-primary-100 dark:border-primary-900">
+            <Icon className="h-4.5 w-4.5 text-primary-700 dark:text-primary-300" />
           </div>
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-            <p className="text-small font-semibold text-foreground">{result}</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
+            <p className="text-base font-bold text-foreground tracking-tight">{result}</p>
           </div>
         </div>
-        <Badge variant={toneBadge[tone]}>{result}</Badge>
+        <Badge variant={toneBadge[tone]} className="text-xs font-semibold px-2.5 py-0.5">
+          {result}
+        </Badge>
       </div>
 
-      <div>
-        <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
-          <span>AI confidence</span>
-          <span className="font-medium text-foreground">{Math.round(confidence)}%</span>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
+          <span>Evidence confidence</span>
+          <span className="font-bold text-foreground tabular-nums">{Math.round(confidence)}%</span>
         </div>
-        <Progress value={confidence} tone={confidenceTone(confidence)} className="h-1.5" />
+        <Progress value={confidence} tone={confidenceTone(confidence)} className="h-2 rounded-full" />
       </div>
 
-      <div className={cn("rounded-md bg-muted/50 p-3")}>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Why this decision was made</p>
-        <p className="mt-1 text-small text-foreground">{reasoning}</p>
+      <div className="rounded-lg border border-border/80 bg-muted/40 p-3.5 space-y-1">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          Reasoning
+        </p>
+        <p className="text-xs text-foreground/90 leading-relaxed font-normal">{reasoning}</p>
       </div>
 
       {considered && considered.length > 0 && (
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">What AI considered</p>
-          <ul className="mt-1 flex flex-col gap-1 text-small text-muted-foreground">
+        <div className="pt-1 border-t border-border/60">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+            Evidence evaluated
+          </p>
+          <ul className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
             {considered.map((item) => (
-              <li key={item} className="flex items-start gap-1.5">
-                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
+              <li
+                key={item}
+                className="inline-flex items-center rounded-md border border-border bg-card px-2 py-0.5 text-[11px] font-medium text-foreground/80 shadow-2xs"
+              >
                 {item}
               </li>
             ))}

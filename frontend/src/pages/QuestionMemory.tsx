@@ -16,6 +16,7 @@ import { EmptyState } from "../components/ui/empty-state";
 import { LoadingState } from "../components/ui/loading-state";
 import { Input } from "../components/ui/input";
 import { QuestionSimilarityResult } from "../types";
+import { cn } from "../lib/utils";
 
 export default function QuestionMemory() {
   const { data: courses } = useCourses();
@@ -106,93 +107,111 @@ export default function QuestionMemory() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Academic memory"
-        description="AcadIQ's institutional memory of every question ever asked — search question history, spot repeated topics, and get AI suggestions before a concept gets asked the same way again."
+        title="Academic Memory Engine"
+        description="Institutional archive of examination items — query historical patterns, prevent repetitive evaluations, and preserve assessment originality across terms."
       />
 
-      <div className="flex flex-col gap-1.5 sm:max-w-xs">
-        <Label>Course</Label>
-        <Select
-          value={courseId}
-          onValueChange={(v) => {
-            setCourseId(v);
-            setCurrentPaperId("");
-            setPreviousPaperId("");
-            setSelectedQuestionId(null);
-          }}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select a course to search its memory" />
-          </SelectTrigger>
-          <SelectContent>
-            {courses?.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)}>
-                {c.courseCode} — {c.courseName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+              Active Course:
+            </Label>
+            <div className="w-full sm:w-72">
+              <Select
+                value={courseId}
+                onValueChange={(v) => {
+                  setCourseId(v);
+                  setCurrentPaperId("");
+                  setPreviousPaperId("");
+                  setSelectedQuestionId(null);
+                }}
+              >
+                <SelectTrigger className="h-9 text-xs font-medium">
+                  <SelectValue placeholder="Select course archive..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {courses?.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)} className="text-xs">
+                      {c.courseCode} — {c.courseName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="inline-flex h-2 w-2 rounded-full bg-success" />
+            <span>Memory Repository Active</span>
+          </div>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-body font-semibold">
-            <Layers className="h-4 w-4 text-primary-700" /> Topic memory
+      <Card className="shadow-xs">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm font-bold tracking-tight">
+            <Layers className="h-4 w-4 text-primary-600 dark:text-primary-400" /> Syllabus Topic Recurrence
           </CardTitle>
-          <CardDescription>How often each syllabus topic has been examined across this course's history.</CardDescription>
+          <CardDescription className="text-xs">Historical frequency of syllabus topics across archived semester papers.</CardDescription>
         </CardHeader>
         <CardContent>
           {!courseId ? (
-            <EmptyState icon={Layers} title="Select a course" description="Choose a course above to see its topic history." />
+            <EmptyState icon={Layers} title="Select a course" description="Choose an active course above to inspect its topic history." />
           ) : topicFrequency.length === 0 ? (
             <EmptyState
               icon={Layers}
-              title="No topic history yet"
-              description="Upload and parse question papers for this course to build topic memory."
+              title="No historical topics recorded"
+              description="Upload and parse question papers for this course to initialize institutional topic memory."
             />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Topic</TableHead>
-                  <TableHead>Asked in</TableHead>
-                  <TableHead className="text-right">Times asked</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {topicFrequency.map((t) => (
-                  <TableRow key={t.topic}>
-                    <TableCell className="font-medium text-foreground">{t.topic}</TableCell>
-                    <TableCell className="text-small text-muted-foreground">{t.papers.join(", ")}</TableCell>
-                    <TableCell className="text-right">
-                      <Badge variant={t.occurrences >= 3 ? "warning" : "outline"}>{t.occurrences}×</Badge>
-                    </TableCell>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow>
+                    <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Topic</TableHead>
+                    <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Examined Terms</TableHead>
+                    <TableHead className="text-right text-xs font-bold text-muted-foreground uppercase tracking-wider">Frequency</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {topicFrequency.map((t) => (
+                    <TableRow key={t.topic} className="hover:bg-muted/40 transition-colors">
+                      <TableCell className="font-semibold text-xs text-foreground">{t.topic}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{t.papers.join(", ")}</TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant={t.occurrences >= 3 ? "warning" : "outline"} className="tabular-nums font-semibold text-xs">
+                          {t.occurrences}× tested
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-body font-semibold">
-            <GitCompareArrows className="h-4 w-4 text-primary-700" /> Run a new similarity check
+      <Card className="shadow-xs border-primary-100 dark:border-primary-900/60 bg-gradient-to-b from-card to-primary-50/20 dark:to-primary-950/20">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm font-bold tracking-tight">
+            <GitCompareArrows className="h-4 w-4 text-primary-600 dark:text-primary-400" /> Cross-Paper Similarity Audit
           </CardTitle>
-          <CardDescription>Compare a paper against a previous semester's exam to build memory for its questions.</CardDescription>
+          <CardDescription className="text-xs">
+            Run a pairwise similarity check between a candidate paper and a benchmark paper to detect recycled questions.
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
-              <Label>Current paper</Label>
+              <Label className="text-xs font-semibold text-foreground">Candidate Paper (Draft)</Label>
               <Select value={currentPaperId} onValueChange={setCurrentPaperId} disabled={!courseId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select paper" />
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Select candidate paper..." />
                 </SelectTrigger>
                 <SelectContent>
                   {papers.map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>
+                    <SelectItem key={p.id} value={String(p.id)} className="text-xs">
                       {p.semester} {p.year}
                     </SelectItem>
                   ))}
@@ -201,16 +220,16 @@ export default function QuestionMemory() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label>Previous paper</Label>
+              <Label className="text-xs font-semibold text-foreground">Historical Benchmark Paper</Label>
               <Select value={previousPaperId} onValueChange={setPreviousPaperId} disabled={!courseId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select paper" />
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Select benchmark paper..." />
                 </SelectTrigger>
                 <SelectContent>
                   {papers
                     .filter((p) => String(p.id) !== currentPaperId)
                     .map((p) => (
-                      <SelectItem key={p.id} value={String(p.id)}>
+                      <SelectItem key={p.id} value={String(p.id)} className="text-xs">
                         {p.semester} {p.year}
                       </SelectItem>
                     ))}
@@ -220,55 +239,57 @@ export default function QuestionMemory() {
           </div>
 
           {error && (
-            <div className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-small text-error">
+            <div className="rounded-lg border border-error-border bg-error-bg/60 px-3 py-2 text-xs font-medium text-error">
               {error}
             </div>
           )}
 
-          <div>
+          <div className="flex justify-start">
             <Button
               onClick={runSimilarityCheck}
               disabled={!currentPaperId || !previousPaperId || analyzeSimilarity.isPending}
+              size="sm"
+              className="text-xs font-semibold gap-2"
             >
-              <GitCompareArrows className="h-4 w-4" />
-              {analyzeSimilarity.isPending ? "Checking..." : "Run similarity check"}
+              <GitCompareArrows className="h-3.5 w-3.5" />
+              {analyzeSimilarity.isPending ? "Executing Similarity Audit..." : "Run Pairwise Similarity Audit"}
             </Button>
           </div>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between">
+        <Card className="shadow-xs">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between gap-2">
               <div>
-                <CardTitle className="text-body font-semibold">Question bank</CardTitle>
-                <CardDescription>Select a question to view its academic memory.</CardDescription>
+                <CardTitle className="text-sm font-bold tracking-tight">Active Question Inventory</CardTitle>
+                <CardDescription className="text-xs">Select any question item to inspect cross-term recurrence.</CardDescription>
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 gap-1.5 border-primary-200 bg-primary-50 text-xs text-primary-700 hover:bg-primary-100"
+                className="h-7 gap-1.5 border-primary-200 dark:border-primary-800 bg-primary-50 dark:bg-primary-950/60 text-[11px] font-semibold text-primary-800 dark:text-primary-300 hover:bg-primary-100"
                 onClick={() => {
                   setSearchQuery("normalization");
                   setShowDemo(true);
                   setSelectedQuestionId(null);
                 }}
               >
-                <Lightbulb className="h-3 w-3" /> Demo Query
+                <Lightbulb className="h-3 w-3" /> Audit Demo Case
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             {courseLoading ? (
-              <LoadingState label="Loading questions..." />
+              <LoadingState label="Indexing question records..." />
             ) : selectedPaper && selectedPaper.questions && selectedPaper.questions.length > 0 ? (
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3">
                 <div className="relative">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search previous questions..."
-                    className="pl-9"
+                    placeholder="Search candidate questions or topics..."
+                    className="h-9 pl-9 text-xs"
                     value={searchQuery}
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
@@ -276,43 +297,51 @@ export default function QuestionMemory() {
                     }}
                   />
                 </div>
-                <div className="max-h-[400px] overflow-y-auto rounded-md border border-border scrollbar-thin">
+                <div className="max-h-[380px] overflow-y-auto rounded-lg border border-border scrollbar-thin">
                   <Table>
-                    <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-sm">
+                    <TableHeader className="sticky top-0 bg-muted/90 backdrop-blur-xs z-10">
                       <TableRow>
-                        <TableHead>Question</TableHead>
-                        <TableHead>Topic</TableHead>
-                        <TableHead className="text-right">Marks</TableHead>
+                        <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Question Stem</TableHead>
+                        <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Topic</TableHead>
+                        <TableHead className="text-right text-xs font-bold text-muted-foreground uppercase tracking-wider">Marks</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {selectedPaper.questions
                         .filter((q) => !searchQuery || q.questionText.toLowerCase().includes(searchQuery.toLowerCase()) || q.topic?.toLowerCase().includes(searchQuery.toLowerCase()))
-                        .map((q) => (
-                          <TableRow
-                            key={q.id}
-                            onClick={() => {
-                              setSelectedQuestionId(q.id);
-                              setShowDemo(false);
-                            }}
-                            className={`cursor-pointer ${selectedQuestionId === q.id ? "bg-primary-50/60" : ""}`}
-                          >
-                            <TableCell className="max-w-xs text-small text-foreground">{q.questionText}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{q.topic ?? "—"}</TableCell>
-                            <TableCell className="text-right text-xs text-muted-foreground">{q.marks}</TableCell>
-                          </TableRow>
-                        ))}
+                        .map((q) => {
+                          const isSelected = selectedQuestionId === q.id;
+                          return (
+                            <TableRow
+                              key={q.id}
+                              onClick={() => {
+                                setSelectedQuestionId(q.id);
+                                setShowDemo(false);
+                              }}
+                              className={cn(
+                                "cursor-pointer transition-colors text-xs",
+                                isSelected
+                                  ? "bg-primary-50/80 dark:bg-primary-950/60 font-semibold border-l-2 border-l-primary"
+                                  : "hover:bg-muted/40"
+                              )}
+                            >
+                              <TableCell className="max-w-xs text-foreground font-medium line-clamp-2">{q.questionText}</TableCell>
+                              <TableCell className="text-muted-foreground whitespace-nowrap">{q.topic ?? "—"}</TableCell>
+                              <TableCell className="text-right tabular-nums text-foreground font-semibold">{q.marks}</TableCell>
+                            </TableRow>
+                          );
+                        })}
                     </TableBody>
                   </Table>
                 </div>
               </div>
             ) : showDemo ? (
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3">
                 <div className="relative">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search previous questions..."
-                    className="pl-9"
+                    placeholder="Search candidate questions or topics..."
+                    className="h-9 pl-9 text-xs"
                     value={searchQuery}
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
@@ -320,20 +349,20 @@ export default function QuestionMemory() {
                     }}
                   />
                 </div>
-                <div className="rounded-md border border-border">
+                <div className="rounded-lg border border-border overflow-hidden">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="bg-muted/50">
                       <TableRow>
-                        <TableHead>Question</TableHead>
-                        <TableHead>Topic</TableHead>
-                        <TableHead className="text-right">Marks</TableHead>
+                        <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Question Stem</TableHead>
+                        <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Topic</TableHead>
+                        <TableHead className="text-right text-xs font-bold text-muted-foreground uppercase tracking-wider">Marks</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      <TableRow className="cursor-pointer bg-primary-50/60">
-                        <TableCell className="max-w-xs text-small text-foreground">Explain normalization techniques.</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">Database Design</TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">10</TableCell>
+                      <TableRow className="cursor-pointer bg-primary-50/80 dark:bg-primary-950/60 border-l-2 border-l-primary text-xs">
+                        <TableCell className="max-w-xs font-semibold text-foreground">Explain normalization techniques with BCNF criteria.</TableCell>
+                        <TableCell className="text-muted-foreground">Database Design</TableCell>
+                        <TableCell className="text-right tabular-nums font-bold text-foreground">10</TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>
@@ -342,40 +371,51 @@ export default function QuestionMemory() {
             ) : (
               <EmptyState
                 icon={FileSearch2}
-                title="Select a paper to browse its questions"
-                description="Choose a course and a current paper above to see its parsed question bank."
+                title="Select a paper to browse its question bank"
+                description="Choose an active course and candidate paper above to inspect its parsed questions."
               />
             )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-body font-semibold">
-              <History className="h-4 w-4 text-primary-700" /> Question history
+        <Card className="shadow-xs">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-sm font-bold tracking-tight">
+              <History className="h-4 w-4 text-primary-600 dark:text-primary-400" /> Historical Recurrence Footprint
             </CardTitle>
-            <CardDescription>Where this question — or something close to it — has appeared before.</CardDescription>
+            <CardDescription className="text-xs">Prior examination instances matching or conceptually resembling this question stem.</CardDescription>
           </CardHeader>
           <CardContent>
             {showDemo ? (
               <div className="flex flex-col gap-4">
-                <p className="text-small font-medium text-foreground">Explain normalization techniques.</p>
-                <div className="flex flex-col divide-y divide-border">
+                <div className="rounded-lg border border-border bg-muted/30 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Target Item</p>
+                  <p className="mt-1 text-xs sm:text-sm font-semibold text-foreground">Explain normalization techniques with BCNF criteria.</p>
+                </div>
+                <div className="flex flex-col divide-y divide-border/60">
                   <div className="flex items-center justify-between py-2.5 pt-0">
-                    <span className="text-small text-foreground">Fall 2025</span>
-                    <Badge variant="error">87% similar</Badge>
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">Fall 2025 Midterm Examination</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">High conceptual duplicate match</p>
+                    </div>
+                    <Badge variant="error" className="tabular-nums font-semibold text-xs">87% Similarity</Badge>
                   </div>
                   <div className="flex items-center justify-between py-2.5 pb-0">
-                    <span className="text-small text-foreground">Spring 2026</span>
-                    <Badge variant="warning">72% similar</Badge>
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">Spring 2024 Final Examination</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">Repeated assessment pattern</p>
+                    </div>
+                    <Badge variant="warning" className="tabular-nums font-semibold text-xs">72% Similarity</Badge>
                   </div>
                 </div>
-                <div className="flex items-start gap-2.5 rounded-md bg-primary-50/60 p-3">
-                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary-700" />
+                <div className="flex items-start gap-3 rounded-lg border border-primary-200 dark:border-primary-800 bg-primary-50/60 dark:bg-primary-950/40 p-3.5">
+                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary-700 dark:text-primary-300" />
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-primary-700">AI insight</p>
-                    <p className="text-small text-foreground">
-                      This concept has appeared multiple times. Create a case-based question.
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-primary-800 dark:text-primary-300">
+                      Recommendation for Assessment Originality
+                    </p>
+                    <p className="mt-0.5 text-xs text-foreground/90 leading-relaxed">
+                      This core concept has recurred across consecutive terms. Recommend converting into an applied case study scenario with real-world schema anomalies.
                     </p>
                   </div>
                 </div>
@@ -384,36 +424,46 @@ export default function QuestionMemory() {
               <EmptyState
                 icon={History}
                 title="No question selected"
-                description="Click a question in the bank to see its academic memory."
+                description="Click any question row in the active inventory to view historical precedents."
               />
             ) : !selectedQuestionMemory || selectedQuestionMemory.length === 0 ? (
               <EmptyState
                 icon={History}
-                title="No history for this question yet"
-                description="Run a similarity check above against a previous paper to build memory for it."
+                title="No historical matches found"
+                description="This question stem appears unique against previously indexed examinations for this course."
               />
             ) : (
               <div className="flex flex-col gap-4">
-                <p className="text-small font-medium text-foreground">
-                  {questionLookup.get(selectedQuestionId)?.text}
-                </p>
-                <div className="flex flex-col divide-y divide-border">
+                <div className="rounded-lg border border-border bg-muted/30 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Target Item</p>
+                  <p className="mt-1 text-xs sm:text-sm font-semibold text-foreground">
+                    {questionLookup.get(selectedQuestionId)?.text}
+                  </p>
+                </div>
+                <div className="flex flex-col divide-y divide-border/60">
                   {selectedQuestionMemory.map((entry, i) => (
                     <div key={i} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
-                      <span className="text-small text-foreground">{entry.paperLabel}</span>
-                      <Badge variant={entry.similarityPercentage >= 75 ? "error" : entry.similarityPercentage >= 50 ? "warning" : "muted"}>
-                        {Math.round(entry.similarityPercentage)}% similar
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">{entry.paperLabel}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">Archived institutional exam</p>
+                      </div>
+                      <Badge
+                        variant={entry.similarityPercentage >= 75 ? "error" : entry.similarityPercentage >= 50 ? "warning" : "muted"}
+                        className="tabular-nums font-semibold text-xs"
+                      >
+                        {Math.round(entry.similarityPercentage)}% match
                       </Badge>
                     </div>
                   ))}
                 </div>
-                <div className="flex items-start gap-2.5 rounded-md bg-primary-50/60 p-3">
-                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary-700" />
+                <div className="flex items-start gap-3 rounded-lg border border-primary-200 dark:border-primary-800 bg-primary-50/60 dark:bg-primary-950/40 p-3.5">
+                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary-700 dark:text-primary-300" />
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-primary-700">AI insight</p>
-                    <p className="text-small text-foreground">
-                      This concept has appeared {selectedQuestionMemory.length} time
-                      {selectedQuestionMemory.length === 1 ? "" : "s"} before. {selectedQuestionMemory[0].recommendation}
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-primary-800 dark:text-primary-300">
+                      Institutional Memory Insight
+                    </p>
+                    <p className="mt-0.5 text-xs text-foreground/90 leading-relaxed">
+                      This assessment concept has been evaluated across {selectedQuestionMemory.length} prior term{selectedQuestionMemory.length === 1 ? "" : "s"}. {selectedQuestionMemory[0].recommendation}
                     </p>
                   </div>
                 </div>

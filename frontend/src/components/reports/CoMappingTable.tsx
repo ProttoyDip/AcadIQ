@@ -17,6 +17,7 @@ export default function CoMappingTable({ mappings }: { mappings: CoMapping[] }) 
           <TableHead>Course outcome</TableHead>
           <TableHead>Strength</TableHead>
           <TableHead>Why this decision was made</TableHead>
+          <TableHead className="text-right">Confidence</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -28,6 +29,9 @@ export default function CoMappingTable({ mappings }: { mappings: CoMapping[] }) 
               <Badge variant={strengthTone[m.strength]}>{m.strength}</Badge>
             </TableCell>
             <TableCell className="max-w-md text-small text-muted-foreground">{m.rationale}</TableCell>
+            <TableCell className="text-right">
+              <Badge variant="outline">{Math.round(m.confidence)}%</Badge>
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>

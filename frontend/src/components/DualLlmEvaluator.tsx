@@ -31,6 +31,9 @@ interface ModelEvalResult {
 }
 
 interface MultiLlmEvaluationResponse {
+  decision: string;
+  reason: string;
+  confidence: number;
   question: string;
   max_marks: number;
   student_answer: string;
@@ -40,7 +43,7 @@ interface MultiLlmEvaluationResponse {
     rubric_overall_score: number;
     rubric_breakdown: RubricBreakdown;
     variance_percentage: number;
-    jury_confidence?: number;
+    jury_confidence: number;
     has_high_discrepancy: boolean;
     recommendation: string;
   };
@@ -72,14 +75,15 @@ export const DualLlmEvaluator: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post<MultiLlmEvaluationResponse>('/analysis/dual-evaluate', {
+      const res = await api.post<{ data: MultiLlmEvaluationResponse }>('/analysis/dual-evaluate', {
         question,
         maxMarks: Number(maxMarks),
         modelAnswer,
         studentAnswer,
       });
-      setResult(res.data);
-      setOverrideMarks(res.data.consensus.assigned_marks);
+      const evaluation = res.data.data;
+      setResult(evaluation);
+      setOverrideMarks(evaluation.consensus.assigned_marks);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to complete 4-model LLM jury evaluation.');
     } finally {
@@ -219,7 +223,7 @@ export const DualLlmEvaluator: React.FC = () => {
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-medium">
-                      <CheckCircle2 className="w-3 h-3" /> High Jury Consensus ({result.consensus.jury_confidence || 95}% Confidence)
+                      <CheckCircle2 className="w-3 h-3" /> Evidence confidence ({result.confidence}%)
                     </span>
                   )}
                 </div>
@@ -266,9 +270,12 @@ export const DualLlmEvaluator: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 flex items-center gap-3">
-              <BrainCircuit className="w-4 h-4 text-indigo-400 flex-shrink-0" />
-              <span>{result.consensus.recommendation}</span>
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-300 flex items-start gap-3">
+              <BrainCircuit className="w-4 h-4 mt-0.5 text-indigo-400 flex-shrink-0" />
+              <div>
+                <p className="font-semibold text-white">{result.decision}</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-400">{result.reason}</p>
+              </div>
             </div>
           </div>
 
