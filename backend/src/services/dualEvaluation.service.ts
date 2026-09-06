@@ -1,11 +1,115 @@
 import { env } from "../config/env";
-import { callLlmJson } from "../ai/llmClient";
+import { z } from "zod";
+import { calculateConfidence, calculateDocumentCompleteness } from "../ai/confidence";
+import { callValidatedLlmJson } from "../ai/validatedLlm";
 
 export interface DualEvaluationInput {
   question: string;
   maxMarks?: number;
   modelAnswer: string;
   studentAnswer: string;
+}
+
+const rubricScore = z.number().min(0).max(10);
+const directEvaluationSchema = z.object({
+  conceptual_accuracy: rubricScore,
+  completeness: rubricScore,
+  clarity: rubricScore,
+  terminology: rubricScore,
+  assigned_marks: z.number().min(0),
+  feedback: z.string().trim().min(1),
+});
+
+const modelEvaluationSchema = z.object({
+  name: z.string().trim().min(1),
+  assigned_marks: z.number().min(0),
+  rubric_score: rubricScore,
+  rubric_breakdown: z.object({
+    conceptual_accuracy: rubricScore,
+    completeness: rubricScore,
+    clarity: rubricScore,
+    terminology: rubricScore,
+  }),
+  feedback: z.string().trim().min(1),
+}).passthrough();
+
+const dualResultSchema = z.object({
+  question: z.string(),
+  max_marks: z.number().positive(),
+  student_answer: z.string(),
+  consensus: z.object({
+    assigned_marks: z.number().min(0),
+    percentage: z.number().min(0).max(100),
+    rubric_overall_score: rubricScore,
+    rubric_breakdown: z.object({
+      conceptual_accuracy: rubricScore,
+      completeness: rubricScore,
+      clarity: rubricScore,
+      terminology: rubricScore,
+    }),
+    variance_percentage: z.number().min(0).max(100),
+    has_high_discrepancy: z.boolean(),
+    recommendation: z.string().trim().min(1),
+  }).passthrough(),
+  models: z.record(modelEvaluationSchema),
+}).strict().superRefine((result, context) => {
+  if (result.consensus.assigned_marks > result.max_marks) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Consensus marks cannot exceed maximum marks",
+      path: ["consensus", "assigned_marks"],
+    });
+  }
+  for (const [model, evaluation] of Object.entries(result.models)) {
+    if (evaluation.assigned_marks > result.max_marks) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Model marks cannot exceed maximum marks",
+        path: ["models", model, "assigned_marks"],
+      });
+    }
+  }
+});
+
+type DualResult = z.infer<typeof dualResultSchema>;
+
+function lexicalFallback(input: DualEvaluationInput) {
+  const studentWords = input.studentAnswer.toLowerCase().split(/\s+/).filter(Boolean);
+  const modelWords = new Set(input.modelAnswer.toLowerCase().split(/\s+/).filter(Boolean));
+  const overlap = studentWords.filter((word) => modelWords.has(word)).length;
+  const referenceCoverage = modelWords.size > 0 ? overlap / modelWords.size : 0;
+  return {
+    conceptualAccuracy: Math.min(10, Number((referenceCoverage * 10).toFixed(1))),
+    completeness: Math.min(10, Number((Math.min(studentWords.length / Math.max(modelWords.size, 1), 1) * 10).toFixed(1))),
+    clarity: Math.min(10, Number((studentWords.length > 0 && /[.!?]/.test(input.studentAnswer) ? 7 : 5).toFixed(1))),
+    terminology: Math.min(10, Number((referenceCoverage * 10).toFixed(1))),
+  };
+}
+
+function withDualDecisionContract(result: DualResult, input: DualEvaluationInput) {
+  const calculated = calculateConfidence({
+    documentCompleteness: calculateDocumentCompleteness([
+      input.question,
+      input.modelAnswer,
+      input.studentAnswer,
+    ]),
+    questionsAnalyzed: 1,
+    syllabusAvailable: false,
+    courseOutcomesAvailable: false,
+    historicalQuestionCount: 0,
+    historicalExamCount: 0,
+  });
+  const decision = result.consensus.has_high_discrepancy
+    ? "FACULTY_REVIEW_REQUIRED"
+    : "CONSENSUS_SCORE_AVAILABLE";
+  const reason = `${result.consensus.recommendation} Confidence ${calculated.confidence}/100 is based on ${calculated.reason}.`;
+  return {
+    ...result,
+    decision,
+    reason,
+    confidence: calculated.confidence,
+    consensus: { ...result.consensus, jury_confidence: calculated.confidence },
+  };
 }
 
 export const dualEvaluationService = {
@@ -28,9 +132,10 @@ export const dualEvaluationService = {
       });
 
       if (response.ok) {
-        const body = (await response.json()) as { status: string; data: any };
-        if (body.data) {
-          return body.data;
+        const body = (await response.json()) as { status?: string; data?: unknown };
+        const parsed = dualResultSchema.safeParse(body.data);
+        if (parsed.success) {
+          return withDualDecisionContract(parsed.data, input);
         }
       }
     } catch (error) {
@@ -38,11 +143,12 @@ export const dualEvaluationService = {
     }
 
     // 2. Direct Fallback via llmClient (Llama 3.1 & Qwen Rubric Evaluation)
-    let ca = 8.5;
-    let comp = 8.0;
-    let cla = 8.8;
-    let term = 8.5;
-    let feedback = "Student answer presents accurate explanation and strong alignment with rubric.";
+    const heuristic = lexicalFallback(input);
+    let ca = heuristic.conceptualAccuracy;
+    let comp = heuristic.completeness;
+    let cla = heuristic.clarity;
+    let term = heuristic.terminology;
+    let feedback = "Fallback evaluation uses lexical reference coverage, answer completeness, punctuation, and terminology overlap.";
 
     if (env.openAiApiKey) {
       try {
@@ -64,14 +170,12 @@ Return JSON in this format:
 
         const promptUser = `Question: ${input.question}\nMax Marks: ${maxMarks}\nReference Answer: ${input.modelAnswer}\nStudent Answer: ${input.studentAnswer}`;
 
-        const evalResult = await callLlmJson<{
-          conceptual_accuracy: number;
-          completeness: number;
-          clarity: number;
-          terminology: number;
-          assigned_marks: number;
-          feedback: string;
-        }>(promptSystem, promptUser);
+        const evalResult = await callValidatedLlmJson(
+          promptSystem,
+          promptUser,
+          directEvaluationSchema,
+          "student-answer-evaluation"
+        );
 
         ca = evalResult.conceptual_accuracy || ca;
         comp = evalResult.completeness || comp;
@@ -81,24 +185,12 @@ Return JSON in this format:
       } catch (err) {
         console.warn("LLM API call unavailable, utilizing domain heuristic evaluation matrix:", err);
       }
-    } else {
-      // Heuristic evaluation matrix calculation based on student answer relative to reference answer
-      const studentWords = input.studentAnswer.toLowerCase().split(/\s+/).filter(Boolean);
-      const modelWords = new Set(input.modelAnswer.toLowerCase().split(/\s+/).filter(Boolean));
-      const overlap = studentWords.filter((w) => modelWords.has(w)).length;
-      const jaccard = modelWords.size > 0 ? overlap / modelWords.size : 0.5;
-
-      ca = Math.min(10, Math.max(5, Number((7.5 + jaccard * 4.0).toFixed(1))));
-      comp = Math.min(10, Math.max(5, Number((7.0 + Math.min(studentWords.length / 50, 1) * 3.0).toFixed(1))));
-      cla = Math.min(10, Math.max(6, Number((8.0 + (input.studentAnswer.includes(".") ? 1.0 : 0)).toFixed(1))));
-      term = Math.min(10, Math.max(5, Number((7.5 + jaccard * 3.0).toFixed(1))));
-      feedback = "Student answer accurately details connection-oriented vs connectionless mechanisms, three-way handshakes, and application use cases.";
     }
 
     const rubricScore = Number((ca * 0.4 + comp * 0.3 + cla * 0.15 + term * 0.15).toFixed(2));
     const assignedMarks = Number(((rubricScore / 10) * maxMarks).toFixed(2));
 
-    return {
+    const result = dualResultSchema.parse({
       question: input.question,
       max_marks: maxMarks,
       student_answer: input.studentAnswer,
@@ -113,9 +205,9 @@ Return JSON in this format:
           clarity: cla,
           terminology: term,
         },
-        variance_percentage: 3.8,
-        has_high_discrepancy: false,
-        recommendation: "High consensus achieved across Qwen 2.5 7B, Microsoft Phi-3.5 Mini, Mistral 7B v0.3, and LLoRA 7B models.",
+        variance_percentage: 100,
+        has_high_discrepancy: true,
+        recommendation: "The four-model jury was unavailable. This is a validated direct-provider or deterministic lexical fallback; faculty review is required.",
       },
       models: {
         qwen_2_5: {
@@ -162,6 +254,7 @@ Return JSON in this format:
           feedback: "Fine-tuned academic grader confirms high alignment with standard grading rubric criteria and domain language.",
         },
       },
-    };
+    });
+    return withDualDecisionContract(result, input);
   },
 };

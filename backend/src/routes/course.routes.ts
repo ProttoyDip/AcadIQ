@@ -5,9 +5,9 @@ import { requireRole } from "../middleware/role.middleware";
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, requireRole("FACULTY"));
 router.get("/", courseController.list);
 router.get("/:id", courseController.getById);
-router.post("/", requireRole("FACULTY", "ADMIN"), courseController.create);
+router.post("/", courseController.create);
 
 export default router;

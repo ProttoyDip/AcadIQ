@@ -18,6 +18,7 @@ export default function QuestionReviewTable({ questions }: { questions: Question
           <TableHead>Question</TableHead>
           <TableHead>Bloom level</TableHead>
           <TableHead>Clarity</TableHead>
+          <TableHead>Decision and reasoning</TableHead>
           <TableHead>Issues</TableHead>
           <TableHead>Suggested rewrite</TableHead>
         </TableRow>
@@ -28,6 +29,11 @@ export default function QuestionReviewTable({ questions }: { questions: Question
             <TableCell className="font-medium text-foreground">#{q.questionId}</TableCell>
             <TableCell>
               <Badge variant="outline">{bloomLabel(q.bloomLevel)}</Badge>
+            </TableCell>
+            <TableCell className="min-w-64 max-w-md">
+              <p className="font-medium text-foreground">{q.decision}</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{q.reason}</p>
+              <Badge variant="outline" className="mt-2">{Math.round(q.confidence)}% confidence</Badge>
             </TableCell>
             <TableCell className="w-32">
               <div className="flex items-center gap-2">

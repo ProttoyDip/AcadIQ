@@ -20,4 +20,4 @@ export const documentUploadSchema = z.discriminatedUnion("documentType", [
   }),
 ]);
 
-export type UploadedPdf = Pick<Express.Multer.File, "path" | "originalname" | "mimetype" | "size">;
+export type UploadedDocument = Pick<Express.Multer.File, "path" | "originalname" | "mimetype" | "size">;

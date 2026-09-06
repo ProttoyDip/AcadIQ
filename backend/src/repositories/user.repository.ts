@@ -53,5 +53,43 @@ export const userRepository = {
       data: { password: passwordHash },
     });
   },
+
+  listAll() {
+    return prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        facultyProfile: {
+          select: {
+            department: true,
+            designation: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  },
+
+  updateRole(id: number, role: "ADMIN" | "FACULTY") {
+    return prisma.user.update({
+      where: { id },
+      data: { role },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+    });
+  },
+
+  deleteUser(id: number) {
+    return prisma.user.delete({
+      where: { id },
+    });
+  },
 };
 

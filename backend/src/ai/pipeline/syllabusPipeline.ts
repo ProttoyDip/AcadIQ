@@ -1,22 +1,20 @@
-import { callLlmJson } from "../llmClient";
 import { buildSyllabusCoverageUserPrompt, SYLLABUS_COVERAGE_SYSTEM_PROMPT } from "../prompts/syllabusAnalysis.prompt";
 import { syllabusCoverageResponseSchema } from "../schemas/analysisResponse.schema";
 import { SyllabusCoverageResult } from "../../models/types";
-import { AppError } from "../../middleware/error.middleware";
+import { applyCalculatedConfidence, ConfidenceEvidence, defaultConfidenceEvidence } from "../confidence";
+import { callValidatedLlmJson } from "../validatedLlm";
 
 export async function runSyllabusCoveragePipeline(
   syllabusText: string,
-  questionsText: string
+  questionsText: string,
+  evidence?: ConfidenceEvidence
 ): Promise<SyllabusCoverageResult> {
-  const raw = await callLlmJson<unknown>(
+  const parsed = await callValidatedLlmJson(
     SYLLABUS_COVERAGE_SYSTEM_PROMPT,
-    buildSyllabusCoverageUserPrompt(syllabusText, questionsText)
+    buildSyllabusCoverageUserPrompt(syllabusText, questionsText),
+    syllabusCoverageResponseSchema,
+    "syllabus-coverage"
   );
-
-  const parsed = syllabusCoverageResponseSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new AppError("AI response failed validation", 502, parsed.error.flatten());
-  }
-
-  return parsed.data;
+  const reliability = evidence ?? defaultConfidenceEvidence([questionsText]);
+  return { ...parsed, explanation: applyCalculatedConfidence(parsed.explanation, reliability) };
 }

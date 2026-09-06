@@ -17,8 +17,8 @@ export default function Login() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     try {
-      await login.mutateAsync({ email, password });
-      navigate("/dashboard");
+      const result = await login.mutateAsync({ email, password });
+      navigate(result.user.role === "ADMIN" ? "/admin/users" : "/dashboard");
     } catch {
       // surfaced via login.error below
     }

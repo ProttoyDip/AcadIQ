@@ -110,6 +110,9 @@ export interface QuestionReviewResult {
     questionId: number;
     clarityScore: number;
     bloomLevel: BloomLevel;
+    decision: string;
+    reason: string;
+    confidence: number;
     issues: string[];
     suggestedRewrite?: string;
   }>;

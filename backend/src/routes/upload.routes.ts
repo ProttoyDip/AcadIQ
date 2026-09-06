@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { uploadController } from "../controllers/upload.controller";
 import { authenticate } from "../middleware/auth.middleware";
-import { uploadPdf } from "../middleware/upload.middleware";
+import { uploadDocument } from "../middleware/upload.middleware";
+import { requireRole } from "../middleware/role.middleware";
 
 const router = Router();
 
-router.use(authenticate);
-router.post("/syllabus", uploadPdf.single("file"), uploadController.uploadSyllabus);
-router.post("/question-paper", uploadPdf.single("file"), uploadController.uploadQuestionPaper);
+router.use(authenticate, requireRole("FACULTY"));
+router.post("/syllabus", uploadDocument.single("file"), uploadController.uploadSyllabus);
+router.post("/question-paper", uploadDocument.single("file"), uploadController.uploadQuestionPaper);
 
 export default router;

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useReport, useReports } from "../hooks/useReports";
 import { useCourse } from "../hooks/useCourses";
+import CopilotPanel from "../components/copilot/CopilotPanel";
 import PageHeader from "../components/layout/PageHeader";
 import { LoadingState } from "../components/ui/loading-state";
 import { EmptyState } from "../components/ui/empty-state";
@@ -37,7 +38,7 @@ import CoCoverageChart from "../components/analytics/CoCoverageChart";
 import { Progress } from "../components/ui/progress";
 import { Badge } from "../components/ui/badge";
 import { formatDateTime, reportTypeLabel, bloomLabel } from "../lib/format";
-import { deriveScoreFactors, difficultyBucketBreakdown, confidenceFromSimilarity, confidenceFromSampleSize, confidenceForCoStrength } from "../lib/insights";
+import { deriveScoreFactors, difficultyBucketBreakdown } from "../lib/insights";
 import {
   ExamQualityResult,
   QuestionSimilarityResult,
@@ -45,6 +46,7 @@ import {
   CoMappingResult,
   QuestionReviewResult,
   Course,
+  AIExplanation,
 } from "../types";
 
 interface ResolvedQuestion {
@@ -63,6 +65,19 @@ function buildQuestionLookup(course?: Course): Map<number, ResolvedQuestion> {
     }
   }
   return map;
+}
+
+function DecisionContractCard({ explanation }: { explanation: AIExplanation }) {
+  return (
+    <ExplainableAIInsightCard
+      icon={Sparkles}
+      label="AI decision"
+      result={explanation.decision}
+      confidence={explanation.confidence}
+      reasoning={explanation.reason}
+      tone={explanation.confidence >= 75 ? "success" : explanation.confidence >= 50 ? "warning" : "error"}
+    />
+  );
 }
 
 export default function AnalysisReport() {
@@ -102,33 +117,51 @@ export default function AnalysisReport() {
     );
   }
 
-  return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title={reportTypeLabel(report.reportType)}
-        description={`Generated ${formatDateTime(report.createdAt)}`}
-        actions={<Badge variant="outline">Report #{report.id}</Badge>}
-      />
+  const copilotContextLabel =
+    report.reportType === "EXAM_QUALITY"
+      ? `Quality Score: ${Math.round((report.resultJson as any)?.overallScore ?? 0)} · Issues: ${report.recommendations.length}`
+      : reportTypeLabel(report.reportType);
 
-      {report.reportType === "EXAM_QUALITY" && (
-        <ExamQualityReport
-          result={report.resultJson as unknown as ExamQualityResult}
-          similarity={similarity}
-          coMapping={coMapping}
-          questionLookup={questionLookup}
+  return (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+      <div className="flex flex-col gap-6">
+        <PageHeader
+          title={reportTypeLabel(report.reportType)}
+          description={`Generated ${formatDateTime(report.createdAt)}`}
+          actions={<Badge variant="outline">Report #{report.id}</Badge>}
         />
-      )}
-      {report.reportType === "SYLLABUS_COVERAGE" && (
-        <SyllabusCoverageReport result={report.resultJson as unknown as SyllabusCoverageResult} />
-      )}
-      {report.reportType === "QUESTION_SIMILARITY" && (
-        <SimilarityReport result={report.resultJson as unknown as QuestionSimilarityResult} questionLookup={questionLookup} />
-      )}
-      {report.reportType === "CO_MAPPING" && (
-        <CoMappingReport result={report.resultJson as unknown as CoMappingResult} />
-      )}
-      {report.reportType === "QUESTION_REVIEW" && (
-        <QuestionReviewReport result={report.resultJson as unknown as QuestionReviewResult} />
+
+        {report.reportType === "EXAM_QUALITY" && (
+          <ExamQualityReport
+            result={report.resultJson as unknown as ExamQualityResult}
+            similarity={similarity}
+            coMapping={coMapping}
+            questionLookup={questionLookup}
+          />
+        )}
+        {report.reportType === "SYLLABUS_COVERAGE" && (
+          <SyllabusCoverageReport result={report.resultJson as unknown as SyllabusCoverageResult} />
+        )}
+        {report.reportType === "QUESTION_SIMILARITY" && (
+          <SimilarityReport result={report.resultJson as unknown as QuestionSimilarityResult} questionLookup={questionLookup} />
+        )}
+        {report.reportType === "CO_MAPPING" && (
+          <CoMappingReport result={report.resultJson as unknown as CoMappingResult} />
+        )}
+        {report.reportType === "QUESTION_REVIEW" && (
+          <QuestionReviewReport result={report.resultJson as unknown as QuestionReviewResult} />
+        )}
+      </div>
+
+      {report.courseId && (
+        <div className="lg:sticky lg:top-6 lg:h-[calc(100vh-8rem)]">
+          <CopilotPanel
+            courseId={report.courseId}
+            examId={report.questionPaperId ?? undefined}
+            reportId={report.id}
+            contextLabel={copilotContextLabel}
+          />
+        </div>
       )}
     </div>
   );
@@ -367,25 +400,21 @@ function ExamQualityReport({
           explanation="Every AI decision on this page shows its confidence and its reasoning — never a bare number."
         >
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <ExplainableAIInsightCard
-              icon={Gauge}
-              label="Exam quality score"
-              result={`${Math.round(result.overallScore)}/100`}
-              confidence={confidenceFromSampleSize(totalQuestions)}
-              tone={result.overallScore >= 75 ? "success" : result.overallScore >= 50 ? "warning" : "error"}
-              reasoning={
-                scoreFactors.find((f) => !f.positive)?.label ??
-                scoreFactors[0]?.label ??
-                "Computed from topic coverage, cognitive balance, CO alignment, and originality."
-              }
-              considered={scoreFactors.map((f) => f.label)}
+             <ExplainableAIInsightCard
+               icon={Gauge}
+               label="Overall AI decision"
+               result={result.explanation.decision}
+               confidence={result.explanation.confidence}
+               tone={result.overallScore >= 75 ? "success" : result.overallScore >= 50 ? "warning" : "error"}
+               reasoning={result.explanation.reason}
+               considered={scoreFactors.map((f) => f.label)}
             />
 
             <ExplainableAIInsightCard
               icon={Brain}
               label="Cognitive difficulty"
               result={bloomResult}
-              confidence={confidenceFromSampleSize(totalQuestions)}
+               confidence={result.explanation.confidence}
               tone={bloomResult === "Balanced" ? "success" : "warning"}
               reasoning={`${Math.round(buckets.Easy)}% Easy, ${Math.round(buckets.Medium)}% Medium, ${Math.round(buckets.Hard)}% Hard — classified from each question's Bloom level.`}
               considered={result.bloomDistribution.map((b) => `${bloomLabel(b.level)}: ${Math.round(b.percentage)}%`)}
@@ -395,7 +424,7 @@ function ExamQualityReport({
               icon={Target}
               label="CO coverage"
               result={weakestOutcome ? `${weakestOutcome.outcome} weakest (${Math.round(weakestOutcome.percentage)}%)` : "All outcomes covered"}
-              confidence={weakestMapping ? confidenceForCoStrength(weakestMapping.strength) : confidenceFromSampleSize(outcomePoints.length)}
+               confidence={coMapping?.explanation.confidence ?? result.explanation.confidence}
               tone={weakestOutcome && weakestOutcome.percentage < 50 ? "error" : "success"}
               reasoning={
                 weakestMapping?.rationale ??
@@ -409,7 +438,7 @@ function ExamQualityReport({
               icon={GitCompareArrows}
               label="Originality"
               result={similarity ? `${100 - similarity.overallDuplicationPercentage}% original` : "Not yet assessed"}
-              confidence={similarity && topMatches[0] ? confidenceFromSimilarity(topMatches[0].similarityPercentage) : 0}
+               confidence={similarity?.explanation.confidence ?? 0}
               tone={!similarity ? "neutral" : similarity.overallDuplicationPercentage <= 20 ? "success" : "error"}
               reasoning={
                 similarity
@@ -442,6 +471,7 @@ function SyllabusCoverageReport({ result }: { result: SyllabusCoverageResult }) 
   return (
     <>
       <ScoreHero score={result.coveragePercentage} title="Syllabus Coverage Score" subtitle="AI-generated assessment" />
+      <DecisionContractCard explanation={result.explanation} />
       <ReportSection
         icon={BookOpenCheck}
         title="Coverage breakdown"
@@ -498,6 +528,7 @@ function SimilarityReport({
         title="Question Originality Score"
         subtitle="AI-generated assessment"
       />
+      <DecisionContractCard explanation={result.explanation} />
       {topMatch && (
         <AcademicMemoryAlert
           currentQuestionText={current?.text ?? `Question #${topMatch.currentQuestionId}`}
@@ -524,6 +555,7 @@ function CoMappingReport({ result }: { result: CoMappingResult }) {
   return (
     <>
       <ScoreHero score={result.qualityScore} title="CO Mapping Quality Score" subtitle="AI-generated assessment" />
+      <DecisionContractCard explanation={result.explanation} />
       <ReportSection
         icon={Target}
         title="CO coverage"
@@ -561,6 +593,7 @@ function QuestionReviewReport({ result }: { result: QuestionReviewResult }) {
   return (
     <>
       <ScoreHero score={result.qualityScore} title="Question Quality Score" subtitle="AI-generated assessment" />
+      <DecisionContractCard explanation={result.explanation} />
       <ReportSection
         icon={Brain}
         title="Per-question clarity review"

@@ -28,19 +28,27 @@ enum Priority {
   HIGH
 }
 
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
 model User {
-  id             Int              @id @default(autoincrement())
-  name           String           @db.VarChar(100)
-  email          String           @unique @db.VarChar(191)
-  password       String           @db.VarChar(255)
-  role           Role             @default(FACULTY)
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
-  facultyProfile FacultyProfile?
-  courses        Course[]
-  reports        AnalysisReport[]
-  rubrics        Rubric[]
+  id                  Int                  @id @default(autoincrement())
+  name                String               @db.VarChar(100)
+  email               String               @unique @db.VarChar(191)
+  password            String               @db.VarChar(255)
+  role                Role                 @default(FACULTY)
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  facultyProfile      FacultyProfile?
+  courses             Course[]
+  reports             AnalysisReport[]
+  rubrics             Rubric[]
   passwordResetTokens PasswordResetToken[]
+  auditLogs           AuditLog[]
+  copilotThreads      CopilotThread[]
+  chatSessions        ChatSession[]
 
   @@map("users")
 }
@@ -70,6 +78,8 @@ model Course {
   rubrics           Rubric[]
   questionHistory   QuestionHistory[]
   courseOutcomes    CourseOutcome[]
+  copilotThreads    CopilotThread[]
+  chatSessions      ChatSession[]
 
   @@unique([facultyId, courseCode])
   @@index([facultyId])
@@ -103,6 +113,7 @@ model QuestionPaper {
   course       Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
   questions    Question[]
   reports      AnalysisReport[]
+  chatSessions ChatSession[]
 
   @@index([courseId, uploadedAt])
   @@map("question_papers")
@@ -289,5 +300,93 @@ model PasswordResetToken {
   @@index([userId])
   @@index([tokenHash])
   @@map("password_reset_tokens")
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @map("user_id")
+  action    String   @db.VarChar(191)
+  document  String?  @db.VarChar(255)
+  timestamp DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, timestamp])
+  @@map("audit_logs")
+}
+
+model CopilotThread {
+  id              Int              @id @default(autoincrement())
+  facultyId       Int              @map("faculty_id")
+  courseId        Int              @map("course_id")
+  questionPaperId Int?             @map("question_paper_id")
+  reportId        Int?             @map("report_id")
+  title           String           @db.VarChar(200)
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  faculty         User             @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  course          Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  messages        CopilotMessage[]
+
+  @@index([facultyId, courseId])
+  @@map("copilot_threads")
+}
+
+model CopilotMessage {
+  id        Int           @id @default(autoincrement())
+  threadId  Int           @map("thread_id")
+  role      String        @db.VarChar(20) // "user" | "assistant" | "system"
+  content   String        @db.Text
+  citations Json?
+  createdAt DateTime      @default(now()) @map("created_at")
+  thread    CopilotThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@map("copilot_messages")
+}
+
+model ChatSession {
+  id        Int              @id @default(autoincrement())
+  userId    Int              @map("user_id")
+  courseId  Int?             @map("course_id")
+  examId    Int?             @map("exam_id")
+  title     String           @db.VarChar(200)
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course    Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  exam      QuestionPaper?   @relation(fields: [examId], references: [id], onDelete: SetNull)
+  messages  ChatMessage[]
+  contexts  CopilotContext[]
+
+  @@index([userId, courseId])
+  @@index([examId])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id          Int         @id @default(autoincrement())
+  sessionId   Int         @map("session_id")
+  role        ChatRole
+  content     String      @db.LongText
+  aiReasoning String?     @map("ai_reasoning") @db.Text
+  confidence  Decimal?    @db.Decimal(5, 2)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  session     ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("chat_messages")
+}
+
+model CopilotContext {
+  id         Int         @id @default(autoincrement())
+  sessionId  Int         @map("session_id")
+  sourceType String      @map("source_type") @db.VarChar(50)
+  sourceId   Int?        @map("source_id")
+  content    String      @db.LongText
+  createdAt  DateTime    @default(now()) @map("created_at")
+  session    ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, sourceType])
+  @@map("copilot_contexts")
 }
 

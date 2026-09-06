@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Dict, Any, List
 from qwen_runner import qwen_runner
 from phi_runner import phi_runner
@@ -24,6 +25,17 @@ Return ONLY a valid JSON object in the exact following format:
   "feedback": "Detailed justification of scores."
 }
 """
+
+
+def evidence_confidence(question: str, model_answer: str, student_answer: str) -> tuple[int, str]:
+    sources = [question, model_answer, student_answer]
+    completeness = round(sum(min(len(re.findall(r"\S+", source)) / 8.0, 1.0) for source in sources) / len(sources) * 100)
+    confidence = round(30.0 * completeness / 100.0 + 25.0 / 30.0)
+    reason = (
+        f"{completeness}% document completeness, 1 question analyzed, syllabus unavailable, "
+        "course outcomes unavailable, no historical questions available"
+    )
+    return confidence, reason
 
 def parse_json_response(raw_text: str, max_marks: float) -> Dict[str, Any]:
     try:
@@ -122,7 +134,7 @@ Evaluate the student's answer and return the JSON evaluation object.
 
     jury_confidence = round(100.0 - min(variance_percentage, 50.0), 1)
 
-    return {
+    result = {
         "question": question,
         "max_marks": max_marks,
         "student_answer": student_answer,
@@ -196,3 +208,9 @@ Evaluate the student's answer and return the JSON evaluation object.
             },
         },
     }
+    confidence, confidence_reason = evidence_confidence(question, model_answer, student_answer)
+    result["decision"] = "FACULTY_REVIEW_REQUIRED" if has_high_discrepancy else "CONSENSUS_SCORE_AVAILABLE"
+    result["reason"] = f"{result['consensus']['recommendation']} Confidence {confidence}/100 is based on {confidence_reason}."
+    result["confidence"] = confidence
+    result["consensus"]["jury_confidence"] = confidence
+    return result

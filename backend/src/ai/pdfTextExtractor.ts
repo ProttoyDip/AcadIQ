@@ -12,7 +12,10 @@ export async function extractPdfText(filePath: string): Promise<string> {
   }
 
   try {
-    const result = await pdfParse(buffer);
+    // pdf.js can misinterpret Node Buffers as PDF strings on newer Node
+    // runtimes. A plain Uint8Array preserves the binary bytes consistently.
+    const bytes = new Uint8Array(buffer);
+    const result = await pdfParse(bytes as unknown as Buffer);
     const text = result.text.replace(/\u0000/g, "").replace(/[ \t]+\n/g, "\n").trim();
     if (!text) throw new AppError("The PDF contains no extractable text", 422);
     return text;

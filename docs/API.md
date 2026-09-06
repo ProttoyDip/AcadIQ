@@ -176,6 +176,8 @@ The exam response now also includes `qualityScore`, `coverage`, `difficulty`, `s
 
 Checks a stored paper against earlier questions from the course. Preview workflows may supply `newQuestions` and `historicalQuestions` directly. Returns `similarQuestions`, highest `similarityScore`, `replacementSuggestion`, `explanation`, and a persisted `reportId`. Every match includes its reason, confidence, and historical semester/year.
 
+`POST /analysis/memory` is an equivalent endpoint for clients that group all AI operations under `/analysis`.
+
 ### `POST /co/analyze`
 
 ```json
@@ -187,6 +189,8 @@ Checks a stored paper against earlier questions from the course. Preview workflo
 ```
 
 Returns `questionCOMap`, per-outcome `coverage`, aggregate `coveragePercentage`, `missingOutcomes`, issues, recommendations, and an explanation. Outcomes and report-scoped mappings are persisted. `/analysis/co-mapping` remains available as an alias.
+
+`POST /analysis/co` is also available as a concise analysis-route alias.
 
 ---
 

@@ -73,7 +73,8 @@
     @apply border-border;
   }
   html {
-    font-feature-settings: "cv11", "ss01";
+    font-feature-settings: "cv11", "ss01", "tnum";
+    font-variant-numeric: tabular-nums;
   }
   body {
     @apply bg-background text-foreground font-sans antialiased transition-colors duration-200;

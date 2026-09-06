@@ -5,36 +5,6 @@ import {
   QuestionSimilarityResult,
 } from "../types";
 
-/**
- * AcadIQ never shows a bare AI number — every derived value here feeds an
- * ExplainableAIInsightCard with a confidence and a reason. None of these are
- * returned by the backend as an explicit "confidence" field; they're honest,
- * documented heuristics computed from the same structured data the AI already
- * produced (strength grades, clarity scores, similarity percentages), not
- * invented numbers.
- */
-
-export function confidenceForCoStrength(strength: "WEAK" | "MODERATE" | "STRONG"): number {
-  return { STRONG: 92, MODERATE: 68, WEAK: 40 }[strength];
-}
-
-export function confidenceFromClarity(clarityScore: number): number {
-  return Math.max(30, Math.min(97, Math.round(clarityScore)));
-}
-
-/** Similarity score doubles as the model's own confidence in the match. */
-export function confidenceFromSimilarity(similarityPercentage: number): number {
-  return Math.round(similarityPercentage);
-}
-
-/** More data points behind a distribution -> higher confidence in the read. */
-export function confidenceFromSampleSize(questionCount: number): number {
-  if (questionCount >= 15) return 90;
-  if (questionCount >= 8) return 75;
-  if (questionCount >= 4) return 55;
-  return 35;
-}
-
 export type DifficultyBucket = "Easy" | "Medium" | "Hard";
 
 const DIFFICULTY_BUCKET: Record<string, DifficultyBucket> = {

@@ -14,10 +14,16 @@ import AnalysisReport from "./pages/AnalysisReport";
 import QuestionMemory from "./pages/QuestionMemory";
 import Settings from "./pages/Settings";
 import DualEvaluatorPage from "./pages/DualEvaluatorPage";
+import AdminUsers from "./pages/AdminUsers";
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <Routes>
         {/* Landing Page */}
         <Route path="/" element={<Landing />} />
@@ -31,7 +37,7 @@ export default function App() {
         </Route>
 
         {/* Faculty Protected Portal Routes */}
-        <Route element={<ProtectedRoute />}>
+        <Route element={<ProtectedRoute role="FACULTY" />}>
           <Route element={<AppShell />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/courses" element={<Courses />} />
@@ -40,6 +46,12 @@ export default function App() {
             <Route path="/question-memory" element={<QuestionMemory />} />
             <Route path="/dual-evaluate" element={<DualEvaluatorPage />} />
             <Route path="/settings" element={<Settings />} />
+          </Route>
+        </Route>
+
+        <Route element={<ProtectedRoute role="ADMIN" />}>
+          <Route element={<AppShell />}>
+            <Route path="/admin/users" element={<AdminUsers />} />
           </Route>
         </Route>
 

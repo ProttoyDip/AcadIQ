@@ -11,7 +11,9 @@ flowchart LR
     C --> D["Prompt builder<br/>(ai/prompts/*)"]
     D --> E["AI analysis engine<br/>(LLM call, ai/llmClient.ts)"]
     E --> F["Response validation<br/>(Zod schemas, ai/schemas/*)"]
-    F -->|invalid| G["Reject + surface error<br/>(AppError 502)"]
+    F -->|invalid| G["Corrective retry<br/>(maximum 1 repair)"]
+    G -->|invalid again| K["Structured failure<br/>decision / reason / confidence=0"]
+    G -->|valid| H
     F -->|valid| H["Structured JSON result"]
     H --> I["Database storage<br/>analysis_reports + recommendations"]
     I --> J["Dashboard visualization<br/>charts, cards, recommendation panel"]
@@ -36,6 +38,22 @@ flowchart LR
 | Non-JSON / malformed LLM output | `AppError(502)` — "AI provider returned malformed JSON" |
 | JSON that doesn't match the expected schema | `AppError(502)` with Zod's flattened error details — "AI response failed validation" |
 | Missing syllabus/question paper prerequisites | `AppError(400/404)` before any LLM call is made (fail fast, save the API call) |
+
+## Reliability contract
+
+Every successful analysis exposes the same decision contract at the response root and in `explanation`:
+
+```json
+{
+  "decision": "REVIEW",
+  "reason": "Evidence for the decision, followed by the confidence inputs used.",
+  "confidence": 72
+}
+```
+
+The model cannot set the final confidence. `ai/confidence.ts` replaces it after validation using fixed weights: document completeness (30), number of questions analyzed up to 30 (25), syllabus availability (20), course-outcome availability (15), and historical evidence up to 30 questions across 3 exams (10). The reason records all five inputs.
+
+Malformed provider output is normalized (including fenced JSON) and retried up to three times. Schema-invalid JSON receives one corrective generation attempt. If recovery still fails, AcadIQ rejects the result without persistence and returns a fallback decision with `decision: "ANALYSIS_UNAVAILABLE"`, an explicit reason, and `confidence: 0`.
 
 ## Intelligence analyses mapped to pipelines
 

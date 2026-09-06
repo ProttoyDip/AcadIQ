@@ -44,11 +44,22 @@ export interface Question {
 export type BloomLevel = "REMEMBER" | "UNDERSTAND" | "APPLY" | "ANALYZE" | "EVALUATE" | "CREATE";
 export type Priority = "LOW" | "MEDIUM" | "HIGH";
 
+export interface AIExplanation {
+  decision: string;
+  reason: string;
+  confidence: number;
+}
+
+interface ExplainableResult extends AIExplanation {
+  explanation: AIExplanation;
+}
+
 export interface TopicCoverage {
   topic: string;
   coveredInExam: boolean;
   questionCount: number;
   marksAllocated: number;
+  reason: string;
 }
 
 export interface BloomDistribution {
@@ -64,7 +75,7 @@ export interface Recommendation {
   priority: Priority;
 }
 
-export interface ExamQualityResult {
+export interface ExamQualityResult extends ExplainableResult {
   reportId: number;
   overallScore: number;
   topicCoverage: TopicCoverage[];
@@ -74,7 +85,7 @@ export interface ExamQualityResult {
   recommendations: Recommendation[];
 }
 
-export interface SyllabusCoverageResult {
+export interface SyllabusCoverageResult extends ExplainableResult {
   reportId: number;
   coveredTopics: string[];
   missingTopics: string[];
@@ -87,9 +98,11 @@ export interface SimilarityMatch {
   previousQuestionId: number;
   similarityPercentage: number;
   matchType: "DUPLICATE" | "SIMILAR_CONCEPT" | "REPEATED_PATTERN";
+  reason: string;
+  confidence: number;
 }
 
-export interface QuestionSimilarityResult {
+export interface QuestionSimilarityResult extends ExplainableResult {
   reportId: number;
   matches: SimilarityMatch[];
   overallDuplicationPercentage: number;
@@ -102,7 +115,10 @@ export interface CoMapping {
   questionId: number;
   courseOutcome: string;
   strength: CoMappingStrength;
+  decision: string;
   rationale: string;
+  reason: string;
+  confidence: number;
 }
 
 export interface Issue {
@@ -111,7 +127,7 @@ export interface Issue {
   questionId?: number;
 }
 
-export interface CoMappingResult {
+export interface CoMappingResult extends ExplainableResult {
   reportId: number;
   qualityScore: number;
   coverage: Record<string, number>;
@@ -125,11 +141,14 @@ export interface QuestionReviewItem {
   questionId: number;
   clarityScore: number;
   bloomLevel: BloomLevel;
+  decision: string;
+  reason: string;
+  confidence: number;
   issues: string[];
   suggestedRewrite?: string;
 }
 
-export interface QuestionReviewResult {
+export interface QuestionReviewResult extends ExplainableResult {
   reportId: number;
   qualityScore: number;
   questions: QuestionReviewItem[];
@@ -144,6 +163,44 @@ export type ReportType =
   | "QUESTION_REVIEW"
   | "CO_MAPPING";
 
+export interface CopilotChatResponse {
+  sessionId: number;
+  title: string;
+  courseId: number;
+  message: string;
+  answer: string;
+  reasoning: string;
+  confidence: number;
+  sources: string[];
+  createdAt: string;
+}
+
+export interface CopilotMessageRecord {
+  id: number;
+  sessionId: number;
+  role: "USER" | "ASSISTANT";
+  content: string;
+  aiReasoning: string | null;
+  confidence: string | number | null;
+  createdAt: string;
+}
+
+export interface CopilotSessionSummary {
+  id: number;
+  userId: number;
+  courseId: number | null;
+  examId: number | null;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  course?: { courseCode: string; courseName: string } | null;
+  _count?: { messages: number };
+}
+
+export interface CopilotSessionDetail extends CopilotSessionSummary {
+  messages: CopilotMessageRecord[];
+}
+
 export interface AnalysisReport {
   id: number;
   facultyId: number;
@@ -153,4 +210,5 @@ export interface AnalysisReport {
   resultJson: Record<string, unknown>;
   createdAt: string;
   recommendations: Recommendation[];
+  explanation?: AIExplanation | null;
 }

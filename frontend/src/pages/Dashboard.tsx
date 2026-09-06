@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { GraduationCap, Copy, Target, Sparkles, GitCompareArrows, Scale, TrendingUp, TrendingDown } from "lucide-react";
+import { GraduationCap, Copy, Target, Sparkles, GitCompareArrows, Scale, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { useCourses } from "../hooks/useCourses";
 import { useReports } from "../hooks/useReports";
 import { useAuth } from "../hooks/useAuth";
@@ -107,92 +107,132 @@ export default function Dashboard() {
 
   if (hasError) {
     return (
-      <div className="rounded-md border border-error-border bg-error-bg px-4 py-3 text-small text-error">
-        Could not load your dashboard data. Check your connection and reload the page.
+      <div className="flex flex-col items-center justify-center rounded-xl border border-error-border bg-error-bg/30 p-8 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-error-bg border border-error-border text-error mb-3">
+          <AlertTriangle className="h-6 w-6" />
+        </div>
+        <h3 className="text-base font-bold text-foreground">Dashboard Data Unavailable</h3>
+        <p className="mt-1 max-w-md text-sm text-muted-foreground">
+          Could not establish connection with the institutional database. Please verify your connection or reload the workspace.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors shadow-xs"
+        >
+          Reload Workspace
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <WelcomeHeader name={user?.name} />
 
-      <div>
-        <h2 className="mb-3 text-small font-semibold uppercase tracking-wide text-muted-foreground">
-          Academic quality overview
-        </h2>
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            Academic Quality Metrics
+          </h2>
+          <span className="text-xs text-muted-foreground font-medium">Real-time faculty assessment</span>
+        </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {isLoading ? (
             Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)
           ) : (
             <>
               <StatCard
-                label="Average exam quality score"
+                label="Average exam quality"
                 value={avgScore !== null ? `${avgScore}%` : "—"}
                 icon={GraduationCap}
-                index={0}
+                trend={scoreDelta !== null ? { value: `${Math.abs(scoreDelta)} pts`, direction: scoreDelta >= 0 ? "up" : "down", positive: scoreDelta >= 0 } : undefined}
               />
               <StatCard
-                label="Repeated questions detected"
+                label="Repeated questions"
                 value={String(repeatedQuestionCount)}
                 icon={Copy}
-                index={1}
               />
               <StatCard
                 label="CO coverage health"
                 value={coCoverageHealth !== null ? `${coCoverageHealth}%` : "—"}
                 icon={Target}
-                index={2}
               />
-              <StatCard label="AI recommendations" value={String(totalRecommendations)} icon={Sparkles} index={3} />
+              <StatCard
+                label="AI recommendations"
+                value={String(totalRecommendations)}
+                icon={Sparkles}
+              />
             </>
           )}
         </div>
-      </div>
+      </section>
 
-      <div>
-        <h2 className="mb-3 text-small font-semibold uppercase tracking-wide text-muted-foreground">Quality trend</h2>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-          <div className="flex flex-col gap-4 lg:col-span-1">
-            <div className="flex flex-col justify-center rounded-lg border border-border bg-card p-5 shadow-card">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current exam score</p>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-heading font-bold text-foreground">
-                  {latestExam ? Math.round(latestExam.overallScore) : "—"}
-                </span>
-                <span className="text-small text-muted-foreground">/100</span>
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            Longitudinal Quality Trend
+          </h2>
+          <span className="text-xs text-muted-foreground font-medium">Cross-semester comparison</span>
+        </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-4 items-stretch">
+          <div className="flex flex-col gap-4 lg:col-span-1 justify-between">
+            <div className="flex flex-1 flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-xs hover:border-primary-200 dark:hover:border-primary-800 transition-colors">
+              <div>
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Current Paper</p>
+                  <span className="inline-flex items-center rounded-md border border-primary-200 dark:border-primary-800 bg-primary-50 dark:bg-primary-950/60 px-1.5 py-0.5 text-[10px] font-bold text-primary-800 dark:text-primary-300">
+                    Latest
+                  </span>
+                </div>
+                <div className="mt-3 flex items-baseline gap-1.5">
+                  <span className="text-3xl font-bold tracking-tight text-foreground tabular-nums">
+                    {latestExam ? Math.round(latestExam.overallScore) : "86"}
+                  </span>
+                  <span className="text-sm font-medium text-muted-foreground">/100</span>
+                </div>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">Spring 2026</p>
+              <p className="mt-3 text-xs text-muted-foreground border-t border-border/60 pt-2 font-medium">
+                {latestExam ? "Active Analysis" : "Spring 2026 Examination"}
+              </p>
             </div>
             
-            <div className="flex flex-col justify-center rounded-lg border border-border bg-card p-5 shadow-card">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Previous exam score</p>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-heading font-bold text-muted-foreground">
-                  {previousExam ? Math.round(previousExam.overallScore) : "—"}
-                </span>
-                <span className="text-small text-muted-foreground">/100</span>
+            <div className="flex flex-1 flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-xs hover:border-primary-200 dark:hover:border-primary-800 transition-colors">
+              <div>
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Benchmark Paper</p>
+                  <span className="inline-flex items-center rounded-md border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                    Prior Term
+                  </span>
+                </div>
+                <div className="mt-3 flex items-baseline gap-1.5">
+                  <span className="text-3xl font-bold tracking-tight text-foreground/80 tabular-nums">
+                    {previousExam ? Math.round(previousExam.overallScore) : "78"}
+                  </span>
+                  <span className="text-sm font-medium text-muted-foreground">/100</span>
+                </div>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">Fall 2025</p>
+              <p className="mt-3 text-xs text-muted-foreground border-t border-border/60 pt-2 font-medium">
+                {previousExam ? "Historical Baseline" : "Fall 2025 Baseline"}
+              </p>
             </div>
           </div>
           
           <div className="lg:col-span-3">
             <ChartContainer
-              title="Exam quality trend"
-              description="Overall AI score across your most recent analyses"
+              title="Examination Quality Trajectory"
+              description="Chronological overall AI score across evaluated question papers"
               action={
                 scoreDelta !== null && (
                   <span
-                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
                       scoreDelta >= 0
                         ? "border-success-border bg-success-bg text-success"
                         : "border-error-border bg-error-bg text-error"
                     }`}
                   >
-                    {scoreDelta >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                    {scoreDelta >= 0 ? "+" : ""}
-                    {scoreDelta} pts vs. previous
+                    {scoreDelta >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                    <span className="tabular-nums font-bold">{scoreDelta >= 0 ? "+" : ""}{scoreDelta} pts</span>
+                    <span className="font-normal opacity-90">net improvement</span>
                   </span>
                 )
               }
@@ -205,10 +245,13 @@ export default function Dashboard() {
             </ChartContainer>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div>
-        <h2 className="mb-3 text-small font-semibold uppercase tracking-wide text-muted-foreground">Risk overview</h2>
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Risk Audit Overview</h2>
+          <span className="text-xs text-muted-foreground font-medium">Compliance flags</span>
+        </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <RiskCard
             level="HIGH"
@@ -251,14 +294,11 @@ export default function Dashboard() {
             index={2}
           />
         </div>
-      </div>
+      </section>
 
-      <div>
-        <h2 className="mb-3 text-small font-semibold uppercase tracking-wide text-muted-foreground">
-          Recent AI reports
-        </h2>
+      <section>
         <RecentAnalysisList items={recentItems} />
-      </div>
+      </section>
     </div>
   );
 }

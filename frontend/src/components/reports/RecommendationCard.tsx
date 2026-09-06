@@ -17,28 +17,33 @@ const severityIcon: Record<Priority, typeof AlertTriangle> = {
   LOW: Info,
 };
 
-const severityBorder: Record<Priority, string> = {
-  HIGH: "border-l-error",
-  MEDIUM: "border-l-warning",
-  LOW: "border-l-success",
+const severityStyles: Record<
+  Priority,
+  { border: string; iconColor: string; tag: string }
+> = {
+  HIGH: { border: "border-l-error", iconColor: "text-error", tag: "High Priority Action" },
+  MEDIUM: { border: "border-l-warning", iconColor: "text-warning", tag: "Advisory" },
+  LOW: { border: "border-l-success", iconColor: "text-success", tag: "Best Practice" },
 };
 
-export default function RecommendationCard({ message, priority, index = 0 }: RecommendationCardProps) {
+export default function RecommendationCard({ message, priority }: RecommendationCardProps) {
   const Icon = severityIcon[priority];
+  const styles = severityStyles[priority];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, delay: index * 0.04 }}
+    <div
       className={cn(
-        "flex items-start gap-2.5 rounded-lg border border-l-4 border-border bg-card p-4",
-        severityBorder[priority]
+        "flex items-start justify-between gap-3.5 rounded-xl border border-border border-l-4 bg-card p-4 shadow-2xs transition-colors hover:bg-muted/20",
+        styles.border
       )}
     >
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-      <p className="flex-1 text-small text-foreground">{message}</p>
-      <Badge variant={priorityTone(priority)}>{priority}</Badge>
-    </motion.div>
+      <div className="flex items-start gap-3 min-w-0">
+        <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", styles.iconColor)} />
+        <p className="text-xs sm:text-sm font-medium text-foreground leading-relaxed">{message}</p>
+      </div>
+      <Badge variant={priorityTone(priority)} className="shrink-0 text-[11px] font-semibold tracking-wide uppercase px-2 py-0.5">
+        {styles.tag}
+      </Badge>
+    </div>
   );
 }

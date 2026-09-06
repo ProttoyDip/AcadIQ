@@ -25,11 +25,11 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   }
 
   if (err instanceof multer.MulterError) {
-    const message = err.code === "LIMIT_FILE_SIZE" ? "PDF exceeds the 10 MB limit" : err.message;
+    const message = err.code === "LIMIT_FILE_SIZE" ? "File exceeds the 10 MB limit" : err.message;
     return failure(res, message, 400);
   }
 
-  if (err instanceof Error && err.message === "Only PDF files are allowed") {
+  if (err instanceof Error && err.message === "Only PDF and DOCX files are allowed") {
     return failure(res, err.message, 400);
   }
 

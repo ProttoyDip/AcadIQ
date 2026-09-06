@@ -62,34 +62,54 @@ const completeReportInclude = {
 } as const;
 
 export const reportRepository = {
-  createExplainable(
+  async createExplainable(
     data: ReportData,
     recommendations: Array<{ message: string; priority: PriorityValue }>,
     explanation: AIExplanationResult
   ) {
-    return prisma.analysisReport.create({
-      data: reportCreateData(data, recommendations, explanation),
-      include: completeReportInclude,
-    });
+    const [report] = await prisma.$transaction([
+      prisma.analysisReport.create({
+        data: reportCreateData(data, recommendations, explanation),
+        include: completeReportInclude,
+      }),
+      prisma.auditLog.create({
+        data: {
+          userId: data.facultyId,
+          action: "Faculty generated analysis",
+          document: data.questionPaperId ? `question-paper:${data.questionPaperId}` : `course:${data.courseId}`,
+        },
+      }),
+    ]);
+    return report;
   },
 
-  createExamAnalysis(data: ReportData, result: ExamQualityResult) {
-    return prisma.analysisReport.create({
-      data: {
-        ...reportCreateData(data, result.recommendations, result.explanation),
-        examQualityScore: {
-          create: {
-            qualityScore: result.qualityScore,
-            scoreFactors: result.scoreFactors as unknown as Prisma.InputJsonValue,
-            positivePoints: result.positivePoints as Prisma.InputJsonValue,
-            issues: result.issues as unknown as Prisma.InputJsonValue,
-            recommendations: result.recommendations as unknown as Prisma.InputJsonValue,
-            confidenceScore: result.explanation.confidence,
+  async createExamAnalysis(data: ReportData, result: ExamQualityResult) {
+    const [report] = await prisma.$transaction([
+      prisma.analysisReport.create({
+        data: {
+          ...reportCreateData(data, result.recommendations, result.explanation),
+          examQualityScore: {
+            create: {
+              qualityScore: result.qualityScore,
+              scoreFactors: result.scoreFactors as unknown as Prisma.InputJsonValue,
+              positivePoints: result.positivePoints as Prisma.InputJsonValue,
+              issues: result.issues as unknown as Prisma.InputJsonValue,
+              recommendations: result.recommendations as unknown as Prisma.InputJsonValue,
+              confidenceScore: result.explanation.confidence,
+            },
           },
         },
-      },
-      include: completeReportInclude,
-    });
+        include: completeReportInclude,
+      }),
+      prisma.auditLog.create({
+        data: {
+          userId: data.facultyId,
+          action: "Faculty generated analysis",
+          document: data.questionPaperId ? `question-paper:${data.questionPaperId}` : `course:${data.courseId}`,
+        },
+      }),
+    ]);
+    return report;
   },
 
   async createCoAnalysis(
@@ -125,6 +145,13 @@ export const reportRepository = {
           })),
         });
       }
+      await tx.auditLog.create({
+        data: {
+          userId: data.facultyId,
+          action: "Faculty generated analysis",
+          document: data.questionPaperId ? `question-paper:${data.questionPaperId}` : `course:${data.courseId}`,
+        },
+      });
       return tx.analysisReport.findUniqueOrThrow({ where: { id: report.id }, include: completeReportInclude });
     });
   },
@@ -136,6 +163,14 @@ export const reportRepository = {
   findAllByFaculty(facultyId: number) {
     return prisma.analysisReport.findMany({
       where: { facultyId },
+      orderBy: { createdAt: "desc" },
+      include: completeReportInclude,
+    });
+  },
+
+  findLatestByCourseAndType(courseId: number, reportType: ReportTypeValue) {
+    return prisma.analysisReport.findFirst({
+      where: { courseId, reportType: reportType as ReportType },
       orderBy: { createdAt: "desc" },
       include: completeReportInclude,
     });

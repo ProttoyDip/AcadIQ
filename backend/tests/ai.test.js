@@ -7,6 +7,10 @@ const {
   examQualityResponseSchema,
   questionReviewResponseSchema,
 } = require("../dist/ai/schemas/analysisResponse.schema");
+const {
+  applyCalculatedConfidence,
+  calculateConfidence,
+} = require("../dist/ai/confidence");
 
 const explanation = {
   decision: "Ready with changes",
@@ -87,6 +91,55 @@ test("exam quality result cannot omit its explanation", () => {
     positivePoints: [],
     issues: [],
     recommendations: [],
+  });
+  assert.equal(result.success, false);
+});
+
+test("confidence is deterministic and uses all five evidence inputs", () => {
+  const evidence = {
+    documentCompleteness: 100,
+    questionsAnalyzed: 30,
+    syllabusAvailable: true,
+    courseOutcomesAvailable: true,
+    historicalQuestionCount: 30,
+    historicalExamCount: 3,
+  };
+  const first = calculateConfidence(evidence);
+  const second = calculateConfidence(evidence);
+
+  assert.deepEqual(first, second);
+  assert.equal(first.confidence, 100);
+  assert.match(first.reason, /30 questions analyzed/);
+  assert.match(first.reason, /syllabus available/);
+  assert.match(first.reason, /course outcomes available/);
+  assert.match(first.reason, /3 previous exams/);
+});
+
+test("server replaces model confidence and explains the evidence", () => {
+  const result = applyCalculatedConfidence(
+    { decision: "REVIEW", reason: "Two questions are ambiguous.", confidence: 99 },
+    {
+      documentCompleteness: 50,
+      questionsAnalyzed: 3,
+      syllabusAvailable: false,
+      courseOutcomesAvailable: false,
+      historicalQuestionCount: 0,
+      historicalExamCount: 0,
+    }
+  );
+
+  assert.equal(result.confidence, 18);
+  assert.notEqual(result.confidence, 99);
+  assert.match(result.reason, /Confidence 18\/100 is based on/);
+});
+
+test("question review requires decision reasoning and confidence per question", () => {
+  const result = questionReviewResponseSchema.safeParse({
+    qualityScore: 80,
+    questions: [{ questionId: 1, clarityScore: 80, bloomLevel: "APPLY", issues: [] }],
+    issues: [],
+    recommendations: [],
+    explanation,
   });
   assert.equal(result.success, false);
 });

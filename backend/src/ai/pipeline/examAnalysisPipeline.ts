@@ -1,23 +1,21 @@
-import { callLlmJson } from "../llmClient";
 import { buildExamAnalysisUserPrompt, EXAM_ANALYSIS_SYSTEM_PROMPT } from "../prompts/examAnalysis.prompt";
 import { examQualityResponseSchema } from "../schemas/analysisResponse.schema";
 import { ExamQualityResult } from "../../models/types";
-import { AppError } from "../../middleware/error.middleware";
+import { applyCalculatedConfidence, ConfidenceEvidence, defaultConfidenceEvidence } from "../confidence";
+import { callValidatedLlmJson } from "../validatedLlm";
 
 export async function runExamAnalysisPipeline(
   syllabusText: string,
   questionsText: string,
-  courseOutcomes: Array<{ code: string; description: string }>
+  courseOutcomes: Array<{ code: string; description: string }>,
+  evidence?: ConfidenceEvidence
 ): Promise<ExamQualityResult> {
-  const raw = await callLlmJson<unknown>(
+  const parsed = await callValidatedLlmJson(
     EXAM_ANALYSIS_SYSTEM_PROMPT,
-    buildExamAnalysisUserPrompt(syllabusText, questionsText, courseOutcomes)
+    buildExamAnalysisUserPrompt(syllabusText, questionsText, courseOutcomes),
+    examQualityResponseSchema,
+    "exam-quality"
   );
-
-  const parsed = examQualityResponseSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new AppError("AI response failed validation", 502, parsed.error.flatten());
-  }
-
-  return parsed.data;
+  const reliability = evidence ?? defaultConfidenceEvidence([questionsText]);
+  return { ...parsed, explanation: applyCalculatedConfidence(parsed.explanation, reliability) };
 }

@@ -22,7 +22,9 @@ export default function SimilarityMatchTable({ matches }: { matches: SimilarityM
           <TableHead>Current Q#</TableHead>
           <TableHead>Previous Q#</TableHead>
           <TableHead>Match type</TableHead>
+          <TableHead>Reasoning</TableHead>
           <TableHead className="text-right">Similarity</TableHead>
+          <TableHead className="text-right">Confidence</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -33,8 +35,12 @@ export default function SimilarityMatchTable({ matches }: { matches: SimilarityM
             <TableCell>
               <Badge variant="outline">{matchLabel[m.matchType]}</Badge>
             </TableCell>
+            <TableCell className="max-w-md text-small text-muted-foreground">{m.reason}</TableCell>
             <TableCell className="text-right">
               <Badge variant={similarityTone(m.similarityPercentage)}>{Math.round(m.similarityPercentage)}%</Badge>
+            </TableCell>
+            <TableCell className="text-right">
+              <Badge variant="outline">{Math.round(m.confidence)}%</Badge>
             </TableCell>
           </TableRow>
         ))}
