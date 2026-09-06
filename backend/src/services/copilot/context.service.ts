@@ -1,4 +1,25 @@
 import { retrieveAcademicData, CopilotIntent } from "./retrieval.service";
+import { AcademicMemoryResult } from "../../models/types";
+
+/**
+ * The academic memory pipeline attaches resolved question text to each match
+ * alongside the strict AcademicMemoryResult shape (id-only) so the Copilot can
+ * name the actual repeated question instead of only citing an aggregate score.
+ */
+function topAcademicMemoryMatch(memory: AcademicMemoryResult) {
+  const richest = memory.similarQuestions as unknown as Array<{
+    similarityScore: number;
+    newQuestionText?: string;
+    historicalQuestionText?: string;
+  }>;
+  const top = richest.slice().sort((a, b) => b.similarityScore - a.similarityScore)[0];
+  if (!top?.newQuestionText || !top?.historicalQuestionText) return undefined;
+  return {
+    currentQuestionText: top.newQuestionText,
+    previousQuestionText: top.historicalQuestionText,
+    similarityPercentage: top.similarityScore,
+  };
+}
 
 export interface CopilotContext {
   courseCode: string;
@@ -15,7 +36,12 @@ export interface CopilotContext {
   }>;
   examQuality?: { qualityScore: number; issues: unknown[]; recommendations: unknown[]; positivePoints: unknown[] };
   coCoverage?: { qualityScore: number; coverage: Record<string, number>; missingOutcomes: string[] };
-  academicMemory?: { similarityScore: number; similarQuestionCount: number; replacementSuggestion: string };
+  academicMemory?: {
+    similarityScore: number;
+    similarQuestionCount: number;
+    replacementSuggestion: string;
+    topMatch?: { currentQuestionText: string; previousQuestionText: string; similarityPercentage: number };
+  };
   questionQuality?: { qualityScore: number; lowClarityCount: number };
   sources: string[];
 }
@@ -65,6 +91,7 @@ export async function assembleContext(
           similarityScore: data.academicMemory.similarityScore,
           similarQuestionCount: data.academicMemory.similarQuestions.length,
           replacementSuggestion: data.academicMemory.replacementSuggestion,
+          topMatch: topAcademicMemoryMatch(data.academicMemory),
         }
       : data.similarity
         ? {

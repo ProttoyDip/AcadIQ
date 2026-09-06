@@ -70,6 +70,10 @@ function renderAcademicMemorySection(context: CopilotContext): string {
   section += `\n- Overall similarity score: ${context.academicMemory.similarityScore}%`;
   section += `\n- Similar question pairs found: ${context.academicMemory.similarQuestionCount}`;
   section += `\n- AI suggestion: ${context.academicMemory.replacementSuggestion}`;
+  if (context.academicMemory.topMatch) {
+    const m = context.academicMemory.topMatch;
+    section += `\n- Closest match (${m.similarityPercentage}% similar): current question "${m.currentQuestionText}" vs. previous question "${m.previousQuestionText}"`;
+  }
   return section;
 }
 
