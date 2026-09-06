@@ -17,6 +17,7 @@ import { questionReviewService } from "../services/questionReview.service";
 import { coMappingService } from "../services/coMapping.service";
 import { dualEvaluationService } from "../services/dualEvaluation.service";
 import { extractPdfText } from "../ai/pdfTextExtractor";
+import { extractDocxText } from "../ai/documentTextExtractor";
 import { AppError } from "../middleware/error.middleware";
 
 
@@ -26,6 +27,12 @@ async function extractTextFromFile(file: Express.Multer.File): Promise<string> {
     const ext = path.extname(file.originalname).toLowerCase();
     if (ext === ".pdf" || file.mimetype === "application/pdf") {
       return await extractPdfText(filePath);
+    } else if (
+      ext === ".docx" ||
+      file.mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      file.mimetype === "application/msword"
+    ) {
+      return await extractDocxText(filePath);
     } else {
       return await fs.readFile(filePath, "utf-8");
     }
@@ -120,11 +127,11 @@ export const analysisController = {
       }
 
       if (!modelAnswer || typeof modelAnswer !== "string" || !modelAnswer.trim()) {
-        throw new AppError("Reference answer / marking scheme is required. Please upload a PDF or text file.", 400);
+        throw new AppError("Reference answer / marking scheme is required. Please provide text or upload a document (PDF, Word, or text file).", 400);
       }
 
       if (!studentAnswer || typeof studentAnswer !== "string" || !studentAnswer.trim()) {
-        throw new AppError("Student's written answer is required. Please upload a PDF or text file.", 400);
+        throw new AppError("Student's written answer is required. Please provide text or upload a document (PDF, Word, or text file).", 400);
       }
 
       const result = await dualEvaluationService.evaluate(String(req.user!.userId), {
