@@ -11,19 +11,19 @@ interface Tier {
 
 const TIERS: Tier[] = [
   {
-    name: "Foundational",
+    name: "Easy",
     description: "Remember + Understand",
     levels: ["REMEMBER", "UNDERSTAND"],
     target: 40,
   },
   {
-    name: "Applied",
+    name: "Medium",
     description: "Apply + Analyze",
     levels: ["APPLY", "ANALYZE"],
     target: 40,
   },
   {
-    name: "Advanced",
+    name: "Hard",
     description: "Evaluate + Create",
     levels: ["EVALUATE", "CREATE"],
     target: 20,

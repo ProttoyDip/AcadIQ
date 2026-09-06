@@ -11,13 +11,17 @@ export const syllabusAnalysisService = {
 
     const result = await runSyllabusCoveragePipeline(syllabusText, questionsText);
 
-    const report = await reportRepository.create({
-      facultyId,
-      courseId: input.courseId,
-      questionPaperId: paper.id,
-      reportType: "SYLLABUS_COVERAGE",
-      resultJson: result,
-    });
+    const report = await reportRepository.createExplainable(
+      {
+        facultyId,
+        courseId: input.courseId,
+        questionPaperId: paper.id,
+        reportType: "SYLLABUS_COVERAGE",
+        resultJson: result,
+      },
+      [],
+      result.explanation
+    );
 
     return { reportId: report.id, ...result };
   },

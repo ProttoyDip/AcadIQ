@@ -28,13 +28,17 @@ export const similarityService = {
       previousQuestions.map((q) => ({ id: q.id, text: q.questionText }))
     );
 
-    const report = await reportRepository.create({
-      facultyId,
-      courseId: input.courseId,
-      questionPaperId: currentPaper.id,
-      reportType: "QUESTION_SIMILARITY",
-      resultJson: result,
-    });
+    const report = await reportRepository.createExplainable(
+      {
+        facultyId,
+        courseId: input.courseId,
+        questionPaperId: currentPaper.id,
+        reportType: "QUESTION_SIMILARITY",
+        resultJson: result,
+      },
+      [{ message: result.recommendation, priority: "MEDIUM" }],
+      result.explanation
+    );
 
     return { reportId: report.id, ...result };
   },

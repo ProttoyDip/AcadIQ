@@ -37,7 +37,7 @@ flowchart LR
 | JSON that doesn't match the expected schema | `AppError(502)` with Zod's flattened error details — "AI response failed validation" |
 | Missing syllabus/question paper prerequisites | `AppError(400/404)` before any LLM call is made (fail fast, save the API call) |
 
-## The three analyses, mapped to pipelines
+## Intelligence analyses mapped to pipelines
 
 | Feature | Endpoint | Pipeline | Prompt |
 |---|---|---|---|
@@ -46,5 +46,6 @@ flowchart LR
 | Course Outcome Mapping | `POST /api/analysis/co-mapping` | `ai/pipeline/coMappingPipeline.ts` | `ai/prompts/coMapping.prompt.ts` |
 | Syllabus Coverage Analyzer | `POST /api/analysis/syllabus` | `ai/pipeline/syllabusPipeline.ts` | `ai/prompts/syllabusAnalysis.prompt.ts` |
 | Question Similarity Detector | `POST /api/analysis/similarity` | `ai/pipeline/similarityPipeline.ts` | `ai/prompts/similarity.prompt.ts` |
+| Academic Memory Engine | `POST /api/memory/check` | `ai/pipeline/academicMemoryPipeline.ts` | `ai/prompts/academicMemory.prompt.ts` |
 
 The Recommendation Engine isn't a separate pipeline — each analysis prompt is required to emit a `recommendations` (or single `recommendation`) field as part of its structured output, so suggestions are always grounded in the same evidence used for scoring.

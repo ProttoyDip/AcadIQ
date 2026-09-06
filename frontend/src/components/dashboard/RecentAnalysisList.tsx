@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { FileBarChart, GraduationCap, GitCompareArrows, BookOpenCheck, ChevronRight } from "lucide-react";
+import { FileBarChart, GraduationCap, GitCompareArrows, BookOpenCheck, Target, Brain, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
@@ -21,6 +21,8 @@ const reportIcon: Record<ReportType, typeof FileBarChart> = {
   EXAM_QUALITY: FileBarChart,
   SYLLABUS_COVERAGE: BookOpenCheck,
   QUESTION_SIMILARITY: GitCompareArrows,
+  CO_MAPPING: Target,
+  QUESTION_REVIEW: Brain,
 };
 
 export default function RecentAnalysisList({ items }: { items: RecentReportItem[] }) {

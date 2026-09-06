@@ -96,7 +96,53 @@ export interface QuestionSimilarityResult {
   recommendation: string;
 }
 
-export type ReportType = "EXAM_QUALITY" | "SYLLABUS_COVERAGE" | "QUESTION_SIMILARITY";
+export type CoMappingStrength = "WEAK" | "MODERATE" | "STRONG";
+
+export interface CoMapping {
+  questionId: number;
+  courseOutcome: string;
+  strength: CoMappingStrength;
+  rationale: string;
+}
+
+export interface Issue {
+  severity: Priority;
+  message: string;
+  questionId?: number;
+}
+
+export interface CoMappingResult {
+  reportId: number;
+  qualityScore: number;
+  coverage: Record<string, number>;
+  mappings: CoMapping[];
+  unmappedQuestionIds: number[];
+  issues: Issue[];
+  recommendations: Recommendation[];
+}
+
+export interface QuestionReviewItem {
+  questionId: number;
+  clarityScore: number;
+  bloomLevel: BloomLevel;
+  issues: string[];
+  suggestedRewrite?: string;
+}
+
+export interface QuestionReviewResult {
+  reportId: number;
+  qualityScore: number;
+  questions: QuestionReviewItem[];
+  issues: Issue[];
+  recommendations: Recommendation[];
+}
+
+export type ReportType =
+  | "EXAM_QUALITY"
+  | "SYLLABUS_COVERAGE"
+  | "QUESTION_SIMILARITY"
+  | "QUESTION_REVIEW"
+  | "CO_MAPPING";
 
 export interface AnalysisReport {
   id: number;
