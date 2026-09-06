@@ -41,7 +41,7 @@ export default function Login() {
           <Input
             id="email"
             type="email"
-            placeholder="jane.rahman@aust.edu"
+            placeholder="faculty@university.edu"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -49,7 +49,12 @@ export default function Login() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="password">Password</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Password</Label>
+            <Link to="/forgot-password" className="text-xs font-medium text-primary-700 hover:underline">
+              Forgot password?
+            </Link>
+          </div>
           <Input
             id="password"
             type="password"
