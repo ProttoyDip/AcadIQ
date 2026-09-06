@@ -105,7 +105,7 @@ services:
       - "8000:8000"
     environment:
       HF_TOKEN: ${HF_TOKEN:-}
-      MODEL_ID: ${MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      MODEL_ID: ${MODEL_ID:-Qwen/Qwen2.5-7B-Instruct}
       PORT: 8000
     networks:
       - acadiq-network
