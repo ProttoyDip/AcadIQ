@@ -19,15 +19,7 @@ router.post("/co-mapping", analysisController.mapCourseOutcomes);
 router.post("/full", analysisController.analyzeFull);
 router.post(
   "/dual-evaluate",
-  (req, res, next) => {
-    uploadReferenceScheme.any()(req, res, (err) => {
-      if (err) return next(err);
-      if (req.files && Array.isArray(req.files) && req.files.length > 0) {
-        req.file = req.files[0];
-      }
-      next();
-    });
-  },
+  uploadReferenceScheme.any(),
   analysisController.dualEvaluate
 );
 

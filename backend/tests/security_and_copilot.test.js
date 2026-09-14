@@ -2,8 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const fs = require("node:fs");
-require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
-const { buildCopilotSystemPrompt } = require("../dist/ai/prompts/copilot.prompt");
+const { buildCopilotSystemPrompt } = require("../dist/services/copilot/prompt.service");
 const { extractDocumentText, extractDocxText, extractPdfText } = require("../dist/ai/documentTextExtractor");
 const { callLlmChat } = require("../dist/ai/llmClient");
 

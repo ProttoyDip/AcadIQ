@@ -33,13 +33,12 @@ export const env = {
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
+  groqApiKey: groqApiKey ?? "",
   openAiApiKey,
   openAiBaseUrl:
     process.env.OPENAI_BASE_URL ??
     (isGroq ? "https://api.groq.com/openai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions"),
-  openAiModel: process.env.OPENAI_MODEL ?? (isGroq ? "openai/gpt-oss-120b" : "gpt-4o-mini"),
-  // Second, different-vendor model for the Dual Evaluator so its consensus is a real cross-check.
-  dualEvalSecondaryModel: process.env.DUAL_EVAL_SECONDARY_MODEL ?? (isGroq ? "qwen/qwen3.8-27b" : "gpt-4o"),
+  openAiModel: process.env.OPENAI_MODEL ?? (isGroq ? "llama-3.3-70b-versatile" : "gpt-4o-mini"),
   aiTimeoutMs: positiveInteger("AI_TIMEOUT_MS", 45_000),
   maxAiInputChars: positiveInteger("MAX_AI_INPUT_CHARS", 80_000),
   isGroq,
