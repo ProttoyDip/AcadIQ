@@ -13,8 +13,8 @@ export default function ReportSection({ icon: Icon, title, explanation, children
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3 space-y-0">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary-50">
-          <Icon className="h-4.5 w-4.5 text-primary-700" />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary-50 dark:bg-primary-950/70">
+          <Icon className="h-4.5 w-4.5 text-primary" />
         </div>
         <div>
           <CardTitle className="text-body font-semibold">{title}</CardTitle>

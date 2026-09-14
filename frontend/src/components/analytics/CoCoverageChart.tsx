@@ -1,43 +1,49 @@
 import { Bar, BarChart, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useChartTheme, scoreTone } from "../../lib/chartTheme";
 
 export interface CoCoveragePoint {
   outcome: string;
   percentage: number;
 }
 
-function toneForCoverage(pct: number): string {
-  if (pct >= 80) return "#1a7f4b";
-  if (pct >= 60) return "#b7791f";
-  return "#c22a2a";
-}
-
 export default function CoCoverageChart({ data }: { data: CoCoveragePoint[] }) {
+  const t = useChartTheme();
+
+  if (!data.length) {
+    return (
+      <p className="flex h-full items-center justify-center text-small text-muted-foreground">
+        No outcome coverage data yet.
+      </p>
+    );
+  }
+
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 28, left: 4, bottom: 0 }}>
+      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 32, left: 4, bottom: 0 }}>
         <XAxis type="number" domain={[0, 100]} hide />
         <YAxis
           type="category"
           dataKey="outcome"
-          width={44}
-          tick={{ fontSize: 12, fill: "#334155", fontWeight: 600 }}
+          width={48}
+          tick={{ fontSize: 12, fill: t.axisStrong, fontWeight: 600 }}
           axisLine={false}
           tickLine={false}
         />
         <Tooltip
-          cursor={{ fill: "rgba(24, 47, 104, 0.04)" }}
-          contentStyle={{ borderRadius: 8, borderColor: "#e5e9f2", fontSize: 13 }}
+          cursor={{ fill: t.track, opacity: 0.5 }}
+          contentStyle={t.tooltip}
           formatter={(value: number) => [`${value}% coverage`, ""]}
         />
-        <Bar dataKey="percentage" radius={[0, 6, 6, 0]} maxBarSize={16} background={{ fill: "#f1f3f9", radius: 6 }}>
+        <Bar dataKey="percentage" radius={[0, 6, 6, 0]} maxBarSize={16} background={{ fill: t.track, radius: 6 }}>
           {data.map((entry) => (
-            <Cell key={entry.outcome} fill={toneForCoverage(entry.percentage)} />
+            <Cell key={entry.outcome} fill={scoreTone(t, entry.percentage)} />
           ))}
+          {/* Values are labelled directly so coverage never depends on colour alone */}
           <LabelList
             dataKey="percentage"
             position="right"
             formatter={(v: number) => `${v}%`}
-            style={{ fontSize: 12, fontWeight: 600, fill: "#334155" }}
+            style={{ fontSize: 12, fontWeight: 600, fill: t.axisStrong }}
           />
         </Bar>
       </BarChart>

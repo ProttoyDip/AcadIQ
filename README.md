@@ -44,7 +44,9 @@ AcadIQ ingests a course's syllabus and question papers (PDF), and runs three foc
 - **Question Similarity Detector** — flags duplicate questions and repeated patterns against previous-year papers, with a similarity percentage.
 - **Syllabus Coverage Analyzer** — covered vs. missing vs. overused topics, exam vs. syllabus.
 - **AI Recommendation Engine** — plain-language, priority-ranked suggestions grounded in the same evidence as the scores (e.g., *"Too many recall-based questions — add more analytical items."*).
-- **Faculty dashboard** — course management, document upload, visual reports (Chart.js), JWT-secured multi-user access.
+- **Full audit in one click** — runs every analysis for a paper and reports per-step outcomes; **PDF export** for moderation paperwork.
+- **Dual-LLM Evaluator** — two models from different vendors score a student answer against your marking scheme; disagreement is flagged for faculty review.
+- **Faculty dashboard** — course pages with per-term quality trends, document upload, visual reports (Chart.js), JWT-secured multi-user access.
 
 ## System Architecture
 
@@ -121,22 +123,26 @@ docker compose up -d mysql
 ### Option A — everything in Docker
 
 ```bash
-docker compose up -d
+docker compose --profile full up -d
 ```
 
 - Frontend → http://localhost:5173
 - Backend API → http://localhost:5000/api
-- MySQL → localhost:3306
+- MySQL → localhost:3308
 
 ### Option B — local dev (hot reload)
 
 ```bash
+docker compose up -d mysql     # database only; app containers are behind the `full` profile
+
 # terminal 1
 cd backend && npm run dev
 
 # terminal 2
 cd frontend && npm run dev
 ```
+
+> Do not run the `full` profile and `npm run dev` at the same time — both bind port 5000 and the container will silently answer instead of your dev server.
 
 ## Database Setup
 
@@ -165,7 +171,10 @@ Full request/response reference: [`docs/API.md`](docs/API.md).
 | `POST` | `/api/analysis/co-mapping` | Map questions to course outcomes |
 | `POST` | `/api/analysis/syllabus` | Run the Syllabus Coverage Analyzer |
 | `POST` | `/api/analysis/similarity` | Run the Question Similarity Detector |
+| `POST` | `/api/analysis/full` | Run every analysis for a paper in one call (per-step outcomes) |
+| `POST` | `/api/analysis/dual-evaluate` | Two-model consensus grading of a student answer |
 | `GET` | `/api/reports/:id` | Fetch a stored analysis report |
+| `GET` | `/api/reports/:id/pdf` | Download a report as PDF |
 
 ## AI Workflow
 

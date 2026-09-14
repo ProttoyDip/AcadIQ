@@ -6,10 +6,6 @@ export const copilotKeys = {
   session: (id: number) => ["copilot", "session", id] as const,
 };
 
-export function useCopilotSessions(courseId?: number) {
-  return useQuery({ queryKey: copilotKeys.sessions(courseId), queryFn: () => copilotService.listSessions(courseId) });
-}
-
 export function useCopilotSession(id: number | null) {
   return useQuery({
     queryKey: copilotKeys.session(id ?? 0),

@@ -28,6 +28,8 @@ export interface ResetPasswordPayload {
 
 export interface MessageResponse {
   message: string;
+  /** Present only in development when SMTP is not configured. */
+  devResetUrl?: string;
 }
 
 export const authService = {

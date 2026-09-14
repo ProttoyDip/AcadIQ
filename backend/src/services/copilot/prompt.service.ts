@@ -1,5 +1,10 @@
+import { env } from "../../config/env";
 import { CopilotContext } from "./context.service";
 import { CopilotIntent } from "./retrieval.service";
+
+const SYLLABUS_EXCERPT_MAX_CHARS = 15_000;
+// Headroom left under maxAiInputChars for prior turns + the user's message.
+const CONVERSATION_RESERVE_CHARS = 12_000;
 
 const COPILOT_SYSTEM_PROMPT = `You are AcadIQ Copilot, an AI academic review assistant for university faculty.
 
@@ -20,7 +25,7 @@ You must respond with a single JSON object and nothing else, matching exactly th
 }
 Do not wrap the JSON in markdown code fences. Do not include a "sources" field — AcadIQ attaches sources separately from what it actually retrieved.`;
 
-function renderCourseSection(context: CopilotContext): string {
+function renderCourseSection(context: CopilotContext, syllabusLimit: number): string {
   let section = `\nCourse: ${context.courseCode} - ${context.courseName}`;
   if (context.courseOutcomes && context.courseOutcomes.length > 0) {
     section += `\n\nDeclared Course Outcomes:`;
@@ -37,8 +42,8 @@ function renderCourseSection(context: CopilotContext): string {
       section += `\n- Q${q.sequenceNumber} (${q.marks} marks)${bloom}${topic}: ${q.questionText}`;
     }
   }
-  if (context.syllabusExcerpt) {
-    section += `\n\nSyllabus Content Excerpt:\n${context.syllabusExcerpt.slice(0, 15000)}`;
+  if (context.syllabusExcerpt && syllabusLimit > 0) {
+    section += `\n\nSyllabus Content Excerpt:\n${context.syllabusExcerpt.slice(0, syllabusLimit)}`;
   }
   return section;
 }
@@ -105,10 +110,15 @@ export function buildCopilotSystemPrompt(context: CopilotContext, intent: Copilo
   const priority = SECTION_RENDERERS[intent];
   const rest = allSections.filter((fn) => fn !== priority);
 
-  let prompt = `${COPILOT_SYSTEM_PROMPT}\n\n--- ACTIVE ACADEMIC CONTEXT ---`;
-  prompt += renderCourseSection(context);
-  prompt += priority(context);
-  for (const render of rest) prompt += render(context);
-  prompt += `\n--- END ACADEMIC CONTEXT ---`;
-  return prompt;
+  const header = `${COPILOT_SYSTEM_PROMPT}\n\n--- ACTIVE ACADEMIC CONTEXT ---`;
+  const footer = `\n--- END ACADEMIC CONTEXT ---`;
+  const reportSections = priority(context) + rest.map((render) => render(context)).join("");
+
+  // Fit the syllabus excerpt into whatever budget remains so a large course
+  // cannot push the prompt past the provider's input limit.
+  const withoutSyllabus = header + renderCourseSection(context, 0) + reportSections + footer;
+  const budget = env.maxAiInputChars - CONVERSATION_RESERVE_CHARS - withoutSyllabus.length;
+  const syllabusLimit = Math.max(0, Math.min(SYLLABUS_EXCERPT_MAX_CHARS, budget));
+
+  return header + renderCourseSection(context, syllabusLimit) + reportSections + footer;
 }

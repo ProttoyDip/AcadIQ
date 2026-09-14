@@ -276,7 +276,7 @@ export default function QuestionMemory() {
                   setSelectedQuestionId(null);
                 }}
               >
-                <Lightbulb className="h-3 w-3" /> Audit Demo Case
+                <Lightbulb className="h-3 w-3" /> Show sample case
               </Button>
             </div>
           </CardHeader>
@@ -337,6 +337,10 @@ export default function QuestionMemory() {
               </div>
             ) : showDemo ? (
               <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 rounded-lg border border-warning-border bg-warning-bg/60 px-3 py-2 text-[11px] font-medium text-warning">
+                  <Badge variant="warning" className="text-[10px] uppercase tracking-wider">Sample data</Badge>
+                  Illustrative example only — not from your archive. Select a course and paper to see real questions.
+                </div>
                 <div className="relative">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -388,6 +392,10 @@ export default function QuestionMemory() {
           <CardContent>
             {showDemo ? (
               <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2 rounded-lg border border-warning-border bg-warning-bg/60 px-3 py-2 text-[11px] font-medium text-warning">
+                  <Badge variant="warning" className="text-[10px] uppercase tracking-wider">Sample data</Badge>
+                  These percentages and the recommendation are fabricated for illustration. Real matches come from similarity audits you run.
+                </div>
                 <div className="rounded-lg border border-border bg-muted/30 p-3">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Target Item</p>
                   <p className="mt-1 text-xs sm:text-sm font-semibold text-foreground">Explain normalization techniques with BCNF criteria.</p>
@@ -412,7 +420,7 @@ export default function QuestionMemory() {
                   <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary-700 dark:text-primary-300" />
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-wider text-primary-800 dark:text-primary-300">
-                      Recommendation for Assessment Originality
+                      Sample recommendation
                     </p>
                     <p className="mt-0.5 text-xs text-foreground/90 leading-relaxed">
                       This core concept has recurred across consecutive terms. Recommend converting into an applied case study scenario with real-world schema anomalies.

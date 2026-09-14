@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { ShieldCheck, ListChecks, Hash, FlagTriangleRight } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils";
+import { useChartTheme, scoreTone } from "../../lib/chartTheme";
 
 interface ExamReportHeroProps {
   score: number;
@@ -27,9 +28,10 @@ const metrics = (props: ExamReportHeroProps) => [
 
 export default function ExamReportHero(props: ExamReportHeroProps) {
   const { score } = props;
+  const chart = useChartTheme();
   const circumference = 2 * Math.PI * 58;
   const offset = circumference - (Math.min(score, 100) / 100) * circumference;
-  const tone = score >= 75 ? "#1a7f4b" : score >= 50 ? "#b7791f" : "#c22a2a";
+  const tone = scoreTone(chart, score);
   const toneBg =
     score >= 75
       ? "bg-success-bg text-success border-success-border"

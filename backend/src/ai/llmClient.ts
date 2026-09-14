@@ -105,6 +105,14 @@ export async function callLlmChatJson<T>(messages: ChatMessage[]): Promise<T> {
     });
   }
 
+  const totalChars = messages.reduce((sum, m) => sum + m.content.length, 0);
+  if (totalChars > env.maxAiInputChars) {
+    throw new AppError("Conversation context is too large for the AI provider", 413, {
+      maxCharacters: env.maxAiInputChars,
+      actualCharacters: totalChars,
+    });
+  }
+
   let lastFailure = "AI copilot request failed";
   for (let attempt = 0; attempt < 3; attempt += 1) {
     let response: Response;
@@ -180,7 +188,7 @@ export async function callLlmChatJson<T>(messages: ChatMessage[]): Promise<T> {
   });
 }
 
-export async function callLlmJson<T>(systemPrompt: string, userPrompt: string): Promise<T> {
+export async function callLlmJson<T>(systemPrompt: string, userPrompt: string, options: { model?: string } = {}): Promise<T> {
   if (!env.openAiApiKey) {
     throw new AppError("AI provider is not configured (GROQ_API_KEY or OPENAI_API_KEY missing)", 503, {
       decision: "ANALYSIS_UNAVAILABLE",
@@ -197,6 +205,7 @@ export async function callLlmJson<T>(systemPrompt: string, userPrompt: string): 
     { role: "system", content: systemPrompt },
     { role: "user", content: userPrompt },
   ];
+  const model = options.model ?? env.openAiModel;
 
   let lastFailure = "AI analysis request failed";
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -209,7 +218,7 @@ export async function callLlmJson<T>(systemPrompt: string, userPrompt: string): 
           Authorization: `Bearer ${env.openAiApiKey}`,
         },
         body: JSON.stringify({
-          model: env.openAiModel,
+          model,
           messages,
           temperature: 0.2,
           max_tokens: 8192,
@@ -227,8 +236,11 @@ export async function callLlmJson<T>(systemPrompt: string, userPrompt: string): 
       continue;
     }
     if (!response.ok) {
-      lastFailure = "AI analysis request failed";
-      logger.warn("llm_request_attempt_failed", { attempt: attempt + 1, statusCode: response.status });
+      lastFailure =
+        response.status === 429
+          ? "AI provider rate limit reached (HTTP 429) — please retry in a minute"
+          : `AI provider returned HTTP ${response.status}`;
+      logger.warn("llm_request_attempt_failed", { attempt: attempt + 1, statusCode: response.status, model });
       if (response.status < 500 && response.status !== 429) break;
     } else {
       try {

@@ -5,6 +5,7 @@ import {
   QuestionSimilarityResult,
   QuestionReviewResult,
   CoMappingResult,
+  FullAnalysisResult,
 } from "../types";
 
 export interface CourseOutcomeInput {
@@ -34,5 +35,10 @@ export const analysisService = {
   mapCourseOutcomes: (courseId: number, questionPaperId: number, courseOutcomes?: CourseOutcomeInput[]) =>
     api
       .post<{ data: CoMappingResult }>("/analysis/co-mapping", { courseId, questionPaperId, courseOutcomes })
+      .then((r) => r.data.data),
+
+  analyzeFull: (courseId: number, questionPaperId: number) =>
+    api
+      .post<{ data: FullAnalysisResult }>("/analysis/full", { courseId, questionPaperId })
       .then((r) => r.data.data),
 };

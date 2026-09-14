@@ -84,21 +84,25 @@ export default function CopilotPanel({ courseId, examId, reportId, contextLabel 
   }
 
   return (
-    <div className="flex h-full flex-col rounded-lg border border-border bg-card">
-      <div className="border-b border-border p-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary-50">
-            <Sparkles className="h-3.5 w-3.5 text-primary-700" />
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border-2 border-primary-200 bg-card shadow-md dark:border-primary-800">
+      <div className="border-b border-border bg-primary-50/60 px-5 py-4 dark:bg-primary-950/40">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+            <Sparkles className="h-5 w-5" />
           </div>
-          <p className="text-small font-semibold text-foreground">AcadIQ Copilot</p>
+          <div className="min-w-0">
+            <p className="text-body font-bold leading-tight text-foreground">AcadIQ Copilot</p>
+            <p className="text-small text-muted-foreground">Ask anything about this report</p>
+          </div>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">Ask about this report</p>
-        {contextLabel && <p className="mt-2 text-xs font-medium text-primary-700">{contextLabel}</p>}
+        {contextLabel && (
+          <p className="mt-3 inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{contextLabel}</p>
+        )}
       </div>
 
-      <div className="border-b border-border p-4">
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Quick actions</p>
-        <div className="grid grid-cols-1 gap-2">
+      <div className="border-b border-border px-5 py-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quick actions</p>
+        <div className="flex flex-wrap gap-2">
           {QUICK_ACTIONS.map((action) => (
             <QuickActionButton
               key={action.label}
@@ -111,14 +115,13 @@ export default function CopilotPanel({ courseId, examId, reportId, contextLabel 
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto scrollbar-thin p-4">
-        <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">Conversation</p>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4">
         {turns.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border bg-muted/40 px-4 py-8 text-center">
-            <Sparkles className="h-5 w-5 text-primary-600" />
+          <div className="flex h-full min-h-[180px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-primary-200 bg-primary-50/40 px-5 py-8 text-center dark:border-primary-800 dark:bg-primary-950/30">
+            <Sparkles className="h-7 w-7 text-primary" />
+            <p className="text-body font-semibold text-foreground">Start a conversation</p>
             <p className="text-small text-muted-foreground">
-              Ask a question about this report, or use a quick action above — AcadIQ Copilot answers only from your
-              academic data.
+              Type a question below or pick a quick action — AcadIQ Copilot answers only from your academic data.
             </p>
           </div>
         ) : (
@@ -139,17 +142,22 @@ export default function CopilotPanel({ courseId, examId, reportId, contextLabel 
           e.preventDefault();
           send(input);
         }}
-        className="flex items-center gap-2 border-t border-border p-3"
+        className="border-t-2 border-primary-100 bg-muted/30 p-4 dark:border-primary-900"
       >
-        <Input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask AcadIQ Copilot..."
-          disabled={chat.isPending}
-        />
-        <Button type="submit" size="icon" disabled={chat.isPending || !input.trim()}>
-          <Send className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2 rounded-xl border-2 border-primary-200 bg-card p-1.5 shadow-sm transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-ring/30 dark:border-primary-800">
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask AcadIQ Copilot…"
+            disabled={chat.isPending}
+            className="h-12 border-0 bg-transparent px-3 text-body shadow-none hover:border-0 focus-visible:border-0 focus-visible:ring-0"
+          />
+          <Button type="submit" size="lg" className="h-11 shrink-0 gap-2 px-5" disabled={chat.isPending || !input.trim()}>
+            <Send className="h-4 w-4" />
+            Send
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">Press Enter to send</p>
       </form>
     </div>
   );

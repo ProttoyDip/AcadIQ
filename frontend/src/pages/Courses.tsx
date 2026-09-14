@@ -1,9 +1,8 @@
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
-import { GraduationCap, Plus, UploadCloud } from "lucide-react";
+import { ArrowRight, GraduationCap, Plus, UploadCloud } from "lucide-react";
 import { useCourses, useCreateCourse } from "../hooks/useCourses";
 import { apiErrorMessage } from "../services/api";
-import { formatDate } from "../lib/format";
 import PageHeader from "../components/layout/PageHeader";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -119,11 +118,11 @@ export default function Courses() {
             <Card key={course.id} className="flex flex-col">
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary-50">
-                    <GraduationCap className="h-4.5 w-4.5 text-primary-700" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary-50 dark:bg-primary-950/70">
+                    <GraduationCap className="h-4.5 w-4.5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-primary-700">{course.courseCode}</p>
+                    <p className="text-xs font-medium uppercase tracking-wide text-primary">{course.courseCode}</p>
                     <CardTitle className="text-body font-semibold">{course.courseName}</CardTitle>
                   </div>
                 </div>
@@ -131,9 +130,14 @@ export default function Courses() {
               <CardContent className="flex flex-1 flex-col justify-between gap-4">
                 <p className="text-small text-muted-foreground">{course.description || "No description provided."}</p>
                 <div className="flex items-center justify-between border-t border-border pt-3">
-                  <span className="text-xs text-muted-foreground">Added {formatDate(course.createdAt)}</span>
-                  <Link to="/upload" className="flex items-center gap-1 text-small font-medium text-primary-700 hover:underline">
-                    <UploadCloud className="h-3.5 w-3.5" /> Upload documents
+                  <Link
+                    to={`/courses/${course.id}`}
+                    className="flex items-center gap-1 text-small font-semibold text-foreground hover:text-primary"
+                  >
+                    Open course <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                  <Link to="/upload" className="flex items-center gap-1 text-small font-medium text-primary hover:underline">
+                    <UploadCloud className="h-3.5 w-3.5" /> Upload
                   </Link>
                 </div>
               </CardContent>

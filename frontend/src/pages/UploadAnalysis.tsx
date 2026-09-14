@@ -1,9 +1,7 @@
 import { FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Plus, Sparkles } from "lucide-react";
 import { useCourses, useCreateCourse } from "../hooks/useCourses";
 import { useUploadSyllabus, useUploadQuestionPaper } from "../hooks/useUpload";
-import { useAnalyzeExam } from "../hooks/useAnalysis";
 import { apiErrorMessage } from "../services/api";
 import PageHeader from "../components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -14,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import Dropzone from "../components/upload/Dropzone";
 import FilePreviewCard from "../components/upload/FilePreviewCard";
 import ProcessingAnimation from "../components/upload/ProcessingAnimation";
+import AnalysisActions from "../components/analysis/AnalysisActions";
 import { cn } from "../lib/utils";
 import {
   Dialog,
@@ -30,8 +29,6 @@ export default function UploadAnalysis() {
   const createCourse = useCreateCourse();
   const uploadSyllabus = useUploadSyllabus();
   const uploadQuestionPaper = useUploadQuestionPaper();
-  const analyzeExam = useAnalyzeExam();
-  const navigate = useNavigate();
 
   const [courseId, setCourseId] = useState<string>("");
   const [year, setYear] = useState(new Date().getFullYear());
@@ -81,20 +78,6 @@ export default function UploadAnalysis() {
       setQuestionPaperId(paper.id);
     } catch (err) {
       setError(apiErrorMessage(err, "Question paper upload failed"));
-    }
-  }
-
-  async function runAnalysis() {
-    if (!questionPaperId) return;
-    setError(null);
-    setProcessing(true);
-    try {
-      const result = await analyzeExam.mutateAsync({ courseId: Number(courseId), questionPaperId });
-      navigate(`/reports/${result.reportId}`);
-    } catch (err) {
-      setError(apiErrorMessage(err, "AI analysis failed"));
-    } finally {
-      setProcessing(false);
     }
   }
 
@@ -292,33 +275,35 @@ export default function UploadAnalysis() {
       )}
 
       {/* Step 3 */}
-      {processing ? (
-        <ProcessingAnimation active={processing} />
-      ) : (
-        <Card className="shadow-xs border-primary-200 dark:border-primary-800/80 bg-gradient-to-r from-card via-card to-primary-50/30 dark:to-primary-950/20">
-          <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 dark:bg-primary-950/60 border border-primary-100 dark:border-primary-800 text-primary-700 dark:text-primary-300">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-foreground tracking-tight">3. Initiate Quality Assurance Pipeline</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Calculates cognitive balance, syllabus coverage score, outcome mappings, and checks historical memory.
-                </p>
-              </div>
+      <Card className="shadow-xs border-primary-200 dark:border-primary-800/80 bg-gradient-to-r from-card via-card to-primary-50/30 dark:to-primary-950/20">
+        <CardContent className="flex flex-col gap-4 p-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 dark:bg-primary-950/60 border border-primary-100 dark:border-primary-800 text-primary-700 dark:text-primary-300">
+              <Sparkles className="h-5 w-5" />
             </div>
-            <Button
-              onClick={runAnalysis}
-              disabled={!readyToAnalyze || analyzeExam.isPending}
-              className="gap-2 shrink-0 font-semibold text-xs h-10 px-5 shadow-xs"
-            >
-              <Sparkles className="h-4 w-4" />
-              {analyzeExam.isPending ? "Executing Audit Pipeline..." : "Execute Quality Audit"}
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+            <div>
+              <p className="text-sm font-bold text-foreground tracking-tight">3. Initiate Quality Assurance Pipeline</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                The full audit runs Exam Quality, Syllabus Coverage, Question Review, CO Mapping and — when an earlier
+                paper exists — Question Similarity, then opens the main report.
+              </p>
+            </div>
+          </div>
+          {processing && <ProcessingAnimation active={processing} />}
+          {questionPaperId ? (
+            <AnalysisActions
+              courseId={Number(courseId)}
+              questionPaperId={questionPaperId}
+              disabled={!readyToAnalyze}
+              navigateOnComplete
+              onStart={() => setProcessing(true)}
+              onFinish={() => setProcessing(false)}
+            />
+          ) : (
+            <p className="text-xs font-medium text-muted-foreground">Upload both documents above to enable analysis.</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

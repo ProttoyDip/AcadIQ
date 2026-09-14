@@ -9,6 +9,8 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Courses from "./pages/Courses";
+import CourseDetail from "./pages/CourseDetail";
+import Reports from "./pages/Reports";
 import UploadAnalysis from "./pages/UploadAnalysis";
 import AnalysisReport from "./pages/AnalysisReport";
 import QuestionMemory from "./pages/QuestionMemory";
@@ -41,7 +43,9 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/courses" element={<Courses />} />
+            <Route path="/courses/:id" element={<CourseDetail />} />
             <Route path="/upload" element={<UploadAnalysis />} />
+            <Route path="/reports" element={<Reports />} />
             <Route path="/reports/:id" element={<AnalysisReport />} />
             <Route path="/question-memory" element={<QuestionMemory />} />
             <Route path="/dual-evaluate" element={<DualEvaluatorPage />} />

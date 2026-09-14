@@ -49,7 +49,7 @@ export default function Settings() {
               )}
             >
               <div className="flex items-center justify-between">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-warning-bg text-warning">
                   <Sun className="h-4 w-4" />
                 </div>
                 <div
@@ -64,10 +64,10 @@ export default function Settings() {
                 <p className="text-xs text-muted-foreground">Clean, crisp light interface</p>
               </div>
               {/* Visual Preview Box */}
-              <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50 p-2.5 space-y-1.5">
-                <div className="h-2 w-16 rounded bg-slate-300" />
-                <div className="h-2 w-24 rounded bg-slate-200" />
-                <div className="h-6 w-full rounded bg-white border border-slate-200" />
+              <div className="mt-1 space-y-1.5 rounded-lg border border-sand-200 bg-sand-50 p-2.5">
+                <div className="h-2 w-16 rounded bg-primary-300" />
+                <div className="h-2 w-24 rounded bg-sand-300" />
+                <div className="h-6 w-full rounded border border-sand-200 bg-white" />
               </div>
             </button>
 
@@ -83,7 +83,7 @@ export default function Settings() {
               )}
             >
               <div className="flex items-center justify-between">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-100 text-primary-700 dark:bg-primary-950/70 dark:text-primary-300">
                   <Moon className="h-4 w-4" />
                 </div>
                 <div
@@ -98,10 +98,10 @@ export default function Settings() {
                 <p className="text-xs text-muted-foreground">Sleek, eye-friendly dark interface</p>
               </div>
               {/* Visual Preview Box */}
-              <div className="mt-1 rounded-lg border border-slate-700 bg-slate-900 p-2.5 space-y-1.5">
-                <div className="h-2 w-16 rounded bg-slate-700" />
-                <div className="h-2 w-24 rounded bg-slate-800" />
-                <div className="h-6 w-full rounded bg-slate-800 border border-slate-700" />
+              <div className="mt-1 space-y-1.5 rounded-lg border border-primary-900 bg-sand-950 p-2.5">
+                <div className="h-2 w-16 rounded bg-primary-500" />
+                <div className="h-2 w-24 rounded bg-sand-800" />
+                <div className="h-6 w-full rounded border border-sand-800 bg-sand-900" />
               </div>
             </button>
 
@@ -133,13 +133,13 @@ export default function Settings() {
               </div>
               {/* Visual Preview Box */}
               <div className="mt-1 flex rounded-lg overflow-hidden border border-border">
-                <div className="w-1/2 bg-slate-100 p-2 space-y-1.5">
-                  <div className="h-2 w-8 rounded bg-slate-300" />
+                <div className="w-1/2 space-y-1.5 bg-sand-100 p-2">
+                  <div className="h-2 w-8 rounded bg-primary-300" />
                   <div className="h-4 w-full rounded bg-white" />
                 </div>
-                <div className="w-1/2 bg-slate-900 p-2 space-y-1.5">
-                  <div className="h-2 w-8 rounded bg-slate-700" />
-                  <div className="h-4 w-full rounded bg-slate-800" />
+                <div className="w-1/2 space-y-1.5 bg-sand-950 p-2">
+                  <div className="h-2 w-8 rounded bg-primary-500" />
+                  <div className="h-4 w-full rounded bg-sand-900" />
                 </div>
               </div>
             </button>
@@ -188,16 +188,6 @@ export default function Settings() {
               Edit profile
             </Button>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-body font-semibold">Notifications</CardTitle>
-          <CardDescription>Choose when AcadIQ should notify you about new analyses.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-small text-muted-foreground">Notification preferences are coming soon.</p>
         </CardContent>
       </Card>
     </div>

@@ -20,7 +20,4 @@ export const copilotService = {
 
   getSession: (id: number) =>
     api.get<{ data: CopilotSessionDetail }>(`/copilot/sessions/${id}`).then((r) => r.data.data),
-
-  deleteSession: (id: number) =>
-    api.delete<{ data: { success: boolean } }>(`/copilot/sessions/${id}`).then((r) => r.data.data),
 };

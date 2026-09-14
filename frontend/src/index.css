@@ -1,70 +1,96 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ------------------------------------------------------------------
+   AcadIQ design tokens — warm off-white surfaces, forest-green brand.
+   Every colour in the product resolves through these variables, so a
+   theme change happens here and nowhere else.
+   ------------------------------------------------------------------ */
 @layer base {
   :root {
-    --background: 220 33% 98%;
-    --foreground: 222 47% 11%;
+    color-scheme: light;
 
+    /* Surfaces */
+    --background: 48 33% 97%;          /* warm off-white canvas */
+    --foreground: 140 12% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-
+    --card-foreground: 140 12% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 140 12% 12%;
 
-    --primary: 222 58% 21%;
-    --primary-foreground: 210 40% 98%;
+    /* Brand */
+    --primary: 150 55% 28%;            /* deep forest green */
+    --primary-foreground: 48 33% 98%;
+    --secondary: 152 38% 47%;          /* lighter leaf green */
+    --secondary-foreground: 150 60% 12%;
 
-    --secondary: 243 54% 63%;
-    --secondary-foreground: 210 40% 98%;
+    /* Quiet UI */
+    --muted: 48 22% 92%;
+    --muted-foreground: 140 7% 38%;
+    --accent: 150 30% 93%;
+    --accent-foreground: 150 55% 20%;
 
-    --muted: 220 20% 95%;
-    --muted-foreground: 222 15% 46%;
+    --border: 45 18% 87%;
+    --input: 45 18% 87%;
+    --ring: 150 55% 28%;
 
-    --accent: 220 22% 94%;
-    --accent-foreground: 222 47% 11%;
+    /* Status */
+    --destructive: 4 62% 46%;
+    --destructive-foreground: 48 33% 98%;
+    --success: 150 60% 27%;
+    --success-bg: 150 45% 94%;
+    --success-border: 150 34% 82%;
+    --warning: 33 78% 34%;
+    --warning-bg: 40 80% 94%;
+    --warning-border: 38 62% 80%;
+    --error: 4 62% 44%;
+    --error-bg: 4 70% 96%;
+    --error-border: 4 50% 86%;
 
-    --destructive: 0 62% 48%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 220 18% 89%;
-    --input: 220 18% 89%;
-    --ring: 222 58% 21%;
-
-    --radius: 0.625rem;
+    --shadow-color: 140 22% 14%;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 224 71% 4%;
-    --foreground: 210 40% 98%;
+    color-scheme: dark;
 
-    --card: 222 47% 8%;
-    --card-foreground: 210 40% 98%;
+    --background: 154 20% 7%;          /* near-black with a green cast */
+    --foreground: 48 20% 95%;
+    --card: 156 16% 10%;
+    --card-foreground: 48 20% 95%;
+    --popover: 156 16% 11%;
+    --popover-foreground: 48 20% 95%;
 
-    --popover: 222 47% 8%;
-    --popover-foreground: 210 40% 98%;
+    --primary: 152 45% 52%;            /* brightened so it reads on dark */
+    --primary-foreground: 154 45% 8%;
+    --secondary: 152 32% 38%;
+    --secondary-foreground: 48 20% 96%;
 
-    --primary: 224 76% 58%;
-    --primary-foreground: 210 40% 98%;
+    --muted: 156 12% 16%;
+    --muted-foreground: 150 8% 70%;
+    --accent: 156 16% 18%;
+    --accent-foreground: 48 20% 95%;
 
-    --secondary: 243 75% 64%;
-    --secondary-foreground: 210 40% 98%;
+    --border: 156 12% 19%;
+    --input: 156 12% 22%;
+    --ring: 152 45% 52%;
 
-    --muted: 222 30% 15%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --destructive: 4 62% 55%;
+    --destructive-foreground: 48 20% 97%;
+    --success: 152 48% 62%;
+    --success-bg: 152 32% 15%;
+    --success-border: 152 26% 26%;
+    --warning: 38 82% 64%;
+    --warning-bg: 38 40% 15%;
+    --warning-border: 38 32% 28%;
+    --error: 4 72% 66%;
+    --error-bg: 4 38% 16%;
+    --error-border: 4 32% 30%;
 
-    --accent: 222 30% 18%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 222 30% 18%;
-    --input: 222 30% 18%;
-    --ring: 224 76% 58%;
+    --shadow-color: 154 40% 2%;
   }
 }
 
@@ -72,21 +98,97 @@
   * {
     @apply border-border;
   }
+
   html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
     font-feature-settings: "cv11", "ss01", "tnum";
-    font-variant-numeric: tabular-nums;
   }
+
   body {
-    @apply bg-background text-foreground font-sans antialiased transition-colors duration-200;
+    @apply bg-background text-foreground font-sans antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Headings never inherit tabular figures — only data does */
+  h1, h2, h3, h4 {
+    font-variant-numeric: normal;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* A single, visible focus treatment for the whole product */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  ::selection {
+    @apply bg-primary/20 text-foreground;
+  }
+
+  /* Long IDs, URLs and pasted question text must reflow, not overflow */
+  .break-anywhere {
+    overflow-wrap: anywhere;
   }
 }
 
 @layer utilities {
   .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-border rounded-full;
+    @apply rounded-full bg-border;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+  }
+
+  /* Tabular figures for metrics, scores and table numerics */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Frosted surface used by the nav and floating panels */
+  .glass {
+    @apply border border-border/70 bg-card/70 backdrop-blur-xl;
+  }
+
+  /* Soft radial brand wash behind hero / CTA sections */
+  .brand-wash {
+    background-image: radial-gradient(
+      60% 60% at 50% 0%,
+      hsl(var(--primary) / 0.14) 0%,
+      hsl(var(--primary) / 0.04) 45%,
+      transparent 75%
+    );
+  }
+
+  .text-gradient-brand {
+    @apply bg-gradient-to-r from-primary-600 via-primary-500 to-primary-400 bg-clip-text text-transparent;
+  }
+  .dark .text-gradient-brand {
+    @apply from-primary-300 via-primary-400 to-primary-200;
+  }
+}
+
+/* Honour the OS setting: keep the final state, drop the motion. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

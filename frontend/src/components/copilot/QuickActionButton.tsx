@@ -15,10 +15,10 @@ export default function QuickActionButton({ icon: Icon, label, onClick, disabled
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-left text-small font-medium text-foreground transition-colors hover:border-primary-200 hover:bg-primary-50/60 disabled:cursor-not-allowed disabled:opacity-50"
+        "inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary hover:bg-primary-50 dark:hover:border-primary-700 dark:hover:bg-primary-950/50 disabled:cursor-not-allowed disabled:opacity-50"
       )}
     >
-      <Icon className="h-3.5 w-3.5 shrink-0 text-primary-700" />
+      <Icon className="h-3.5 w-3.5 shrink-0 text-primary" />
       {label}
     </button>
   );

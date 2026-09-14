@@ -29,7 +29,7 @@ export default function ProcessingAnimation({ active }: { active: boolean }) {
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-6">
       <div className="mb-1 flex items-center gap-2">
-        <Loader2 className="h-4 w-4 animate-spin text-primary-600" />
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
         <p className="text-small font-semibold text-foreground">AcadIQ AI is analyzing your documents</p>
       </div>
       {STEPS.map((step, i) => {
@@ -46,7 +46,7 @@ export default function ProcessingAnimation({ active }: { active: boolean }) {
             {done ? (
               <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
             ) : current ? (
-              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary-600" />
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
             ) : (
               <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />
             )}

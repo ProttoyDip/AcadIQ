@@ -2,6 +2,7 @@ import { env } from "../config/env";
 import { z } from "zod";
 import { calculateConfidence, calculateDocumentCompleteness } from "../ai/confidence";
 import { callValidatedLlmJson } from "../ai/validatedLlm";
+import { logger } from "../utils/logger";
 
 export interface DualEvaluationInput {
   question: string;
@@ -19,17 +20,23 @@ const directEvaluationSchema = z.object({
   assigned_marks: z.number().min(0),
   feedback: z.string().trim().min(1),
 });
+type DirectEvaluation = z.infer<typeof directEvaluationSchema>;
+
+const rubricBreakdownSchema = z.object({
+  conceptual_accuracy: rubricScore,
+  completeness: rubricScore,
+  clarity: rubricScore,
+  terminology: rubricScore,
+});
+type RubricBreakdown = z.infer<typeof rubricBreakdownSchema>;
 
 const modelEvaluationSchema = z.object({
   name: z.string().trim().min(1),
+  provider: z.string().trim().min(1).optional(),
+  kind: z.enum(["llm", "heuristic"]).optional(),
   assigned_marks: z.number().min(0),
   rubric_score: rubricScore,
-  rubric_breakdown: z.object({
-    conceptual_accuracy: rubricScore,
-    completeness: rubricScore,
-    clarity: rubricScore,
-    terminology: rubricScore,
-  }),
+  rubric_breakdown: rubricBreakdownSchema,
   feedback: z.string().trim().min(1),
 }).passthrough();
 
@@ -37,16 +44,18 @@ const dualResultSchema = z.object({
   question: z.string(),
   max_marks: z.number().positive(),
   student_answer: z.string(),
+  reference_answer: z.string().optional(),
+  jury: z.object({
+    mode: z.enum(["multi-model", "single-model", "heuristic"]),
+    requested: z.number().int().min(0),
+    responded: z.number().int().min(0),
+    failed: z.array(z.object({ name: z.string(), error: z.string() })),
+  }).optional(),
   consensus: z.object({
     assigned_marks: z.number().min(0),
     percentage: z.number().min(0).max(100),
     rubric_overall_score: rubricScore,
-    rubric_breakdown: z.object({
-      conceptual_accuracy: rubricScore,
-      completeness: rubricScore,
-      clarity: rubricScore,
-      terminology: rubricScore,
-    }),
+    rubric_breakdown: rubricBreakdownSchema,
     variance_percentage: z.number().min(0).max(100),
     has_high_discrepancy: z.boolean(),
     recommendation: z.string().trim().min(1),
@@ -73,35 +82,82 @@ const dualResultSchema = z.object({
 
 type DualResult = z.infer<typeof dualResultSchema>;
 
-function lexicalFallback(input: DualEvaluationInput) {
+// Consensus is flagged when jurors disagree by more than this share of the max marks.
+const DISCREPANCY_THRESHOLD_PERCENT = 15;
+
+const round = (value: number, digits = 2) => Number(value.toFixed(digits));
+
+function rubricToScore(breakdown: RubricBreakdown): number {
+  return round(
+    breakdown.conceptual_accuracy * 0.4 +
+      breakdown.completeness * 0.3 +
+      breakdown.clarity * 0.15 +
+      breakdown.terminology * 0.15
+  );
+}
+
+function scoreToMarks(score: number, maxMarks: number): number {
+  return round(Math.min(maxMarks, (score / 10) * maxMarks));
+}
+
+function lexicalFallback(input: DualEvaluationInput): RubricBreakdown {
   const studentWords = input.studentAnswer.toLowerCase().split(/\s+/).filter(Boolean);
   const modelWords = new Set(input.modelAnswer.toLowerCase().split(/\s+/).filter(Boolean));
   const overlap = studentWords.filter((word) => modelWords.has(word)).length;
   const referenceCoverage = modelWords.size > 0 ? overlap / modelWords.size : 0;
   return {
-    conceptualAccuracy: Math.min(10, Number((referenceCoverage * 10).toFixed(1))),
-    completeness: Math.min(10, Number((Math.min(studentWords.length / Math.max(modelWords.size, 1), 1) * 10).toFixed(1))),
-    clarity: Math.min(10, Number((studentWords.length > 0 && /[.!?]/.test(input.studentAnswer) ? 7 : 5).toFixed(1))),
-    terminology: Math.min(10, Number((referenceCoverage * 10).toFixed(1))),
+    conceptual_accuracy: Math.min(10, round(referenceCoverage * 10, 1)),
+    completeness: Math.min(10, round(Math.min(studentWords.length / Math.max(modelWords.size, 1), 1) * 10, 1)),
+    clarity: studentWords.length > 0 && /[.!?]/.test(input.studentAnswer) ? 7 : 5,
+    terminology: Math.min(10, round(referenceCoverage * 10, 1)),
   };
+}
+
+function modelKey(modelId: string): string {
+  return modelId.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function providerOf(modelId: string): string {
+  const vendor = modelId.includes("/") ? modelId.split("/")[0] : env.isGroq ? "groq" : "openai";
+  return vendor.charAt(0).toUpperCase() + vendor.slice(1);
+}
+
+async function askJuror(modelId: string, input: DualEvaluationInput, maxMarks: number): Promise<DirectEvaluation> {
+  const promptSystem = `You are a strict, fair university examiner. Score the student's answer against the reference answer on a 0-10 scale for each criterion:
+1. conceptual_accuracy (0-10): are the core concepts correct?
+2. completeness (0-10): how much of the reference content is covered?
+3. clarity (0-10): is the answer well structured and unambiguous?
+4. terminology (0-10): is domain vocabulary used precisely?
+
+Then set assigned_marks out of ${maxMarks} consistent with those scores, and write 2-4 sentences of specific, actionable feedback naming what was correct and what was missing.
+
+Return ONLY JSON in this exact shape:
+{
+  "conceptual_accuracy": number,
+  "completeness": number,
+  "clarity": number,
+  "terminology": number,
+  "assigned_marks": number,
+  "feedback": "string"
+}`;
+
+  const promptUser = `Question: ${input.question}\nMax Marks: ${maxMarks}\nReference Answer: ${input.modelAnswer}\nStudent Answer: ${input.studentAnswer}`;
+
+  return callValidatedLlmJson(promptSystem, promptUser, directEvaluationSchema, `dual-evaluation:${modelId}`, {
+    model: modelId,
+  });
 }
 
 function withDualDecisionContract(result: DualResult, input: DualEvaluationInput) {
   const calculated = calculateConfidence({
-    documentCompleteness: calculateDocumentCompleteness([
-      input.question,
-      input.modelAnswer,
-      input.studentAnswer,
-    ]),
+    documentCompleteness: calculateDocumentCompleteness([input.question, input.modelAnswer, input.studentAnswer]),
     questionsAnalyzed: 1,
     syllabusAvailable: false,
     courseOutcomesAvailable: false,
     historicalQuestionCount: 0,
     historicalExamCount: 0,
   });
-  const decision = result.consensus.has_high_discrepancy
-    ? "FACULTY_REVIEW_REQUIRED"
-    : "CONSENSUS_SCORE_AVAILABLE";
+  const decision = result.consensus.has_high_discrepancy ? "FACULTY_REVIEW_REQUIRED" : "CONSENSUS_SCORE_AVAILABLE";
   const reason = `${result.consensus.recommendation} Confidence ${calculated.confidence}/100 is based on ${calculated.reason}.`;
   return {
     ...result,
@@ -113,10 +169,10 @@ function withDualDecisionContract(result: DualResult, input: DualEvaluationInput
 }
 
 export const dualEvaluationService = {
-  async evaluate(userId: string, input: DualEvaluationInput) {
+  async evaluate(_userId: string, input: DualEvaluationInput) {
     const maxMarks = input.maxMarks || 10;
 
-    // 1. First attempt to call Python FastAPI dual-evaluate microservice
+    // Tier 1: dedicated Python multi-model service, when deployed.
     const aiServiceUrl = process.env.AI_SERVICE_URL || "http://ai-service:8000";
     try {
       const response = await fetch(`${aiServiceUrl}/v1/dual-evaluate`, {
@@ -130,131 +186,114 @@ export const dualEvaluationService = {
         }),
         signal: AbortSignal.timeout(30000),
       });
-
       if (response.ok) {
         const body = (await response.json()) as { status?: string; data?: unknown };
         const parsed = dualResultSchema.safeParse(body.data);
-        if (parsed.success) {
-          return withDualDecisionContract(parsed.data, input);
-        }
+        if (parsed.success) return withDualDecisionContract(parsed.data, input);
       }
     } catch (error) {
-      console.warn("Python AI Microservice unavailable, checking direct LLM consensus pipeline:", error);
+      logger.info("dual_eval_ai_service_unavailable", { error: error instanceof Error ? error.message : String(error) });
     }
 
-    // 2. Direct Fallback via llmClient (Llama 3.1 & Qwen Rubric Evaluation)
-    const heuristic = lexicalFallback(input);
-    let ca = heuristic.conceptualAccuracy;
-    let comp = heuristic.completeness;
-    let cla = heuristic.clarity;
-    let term = heuristic.terminology;
-    let feedback = "Fallback evaluation uses lexical reference coverage, answer completeness, punctuation, and terminology overlap.";
+    // Tier 2: two independent LLM jurors from different vendors, queried in parallel.
+    const jurorIds = Array.from(new Set([env.openAiModel, env.dualEvalSecondaryModel]));
+    const models: DualResult["models"] = {};
+    const failed: { name: string; error: string }[] = [];
 
     if (env.openAiApiKey) {
-      try {
-        const promptSystem = `You are a strict academic evaluator. Score the student's answer against the reference answer on a 0-10 scale for:
-1. conceptual_accuracy (0-10)
-2. completeness (0-10)
-3. clarity (0-10)
-4. terminology (0-10)
-
-Return JSON in this format:
-{
-  "conceptual_accuracy": number,
-  "completeness": number,
-  "clarity": number,
-  "terminology": number,
-  "assigned_marks": number,
-  "feedback": "string"
-}`;
-
-        const promptUser = `Question: ${input.question}\nMax Marks: ${maxMarks}\nReference Answer: ${input.modelAnswer}\nStudent Answer: ${input.studentAnswer}`;
-
-        const evalResult = await callValidatedLlmJson(
-          promptSystem,
-          promptUser,
-          directEvaluationSchema,
-          "student-answer-evaluation"
-        );
-
-        ca = evalResult.conceptual_accuracy || ca;
-        comp = evalResult.completeness || comp;
-        cla = evalResult.clarity || cla;
-        term = evalResult.terminology || term;
-        if (evalResult.feedback) feedback = evalResult.feedback;
-      } catch (err) {
-        console.warn("LLM API call unavailable, utilizing domain heuristic evaluation matrix:", err);
-      }
+      const settled = await Promise.allSettled(jurorIds.map((id) => askJuror(id, input, maxMarks)));
+      settled.forEach((outcome, index) => {
+        const id = jurorIds[index];
+        if (outcome.status === "fulfilled") {
+          const breakdown: RubricBreakdown = {
+            conceptual_accuracy: outcome.value.conceptual_accuracy,
+            completeness: outcome.value.completeness,
+            clarity: outcome.value.clarity,
+            terminology: outcome.value.terminology,
+          };
+          const score = rubricToScore(breakdown);
+          models[modelKey(id)] = {
+            name: id,
+            provider: providerOf(id),
+            kind: "llm",
+            assigned_marks: scoreToMarks(score, maxMarks),
+            rubric_score: score,
+            rubric_breakdown: breakdown,
+            feedback: outcome.value.feedback,
+          };
+        } else {
+          const message = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
+          failed.push({ name: id, error: message });
+          logger.warn("dual_eval_juror_failed", { model: id, error: message });
+        }
+      });
     }
 
-    const rubricScore = Number((ca * 0.4 + comp * 0.3 + cla * 0.15 + term * 0.15).toFixed(2));
-    const assignedMarks = Number(((rubricScore / 10) * maxMarks).toFixed(2));
+    // Tier 3: deterministic lexical heuristic, clearly labelled, only when no LLM answered.
+    if (Object.keys(models).length === 0) {
+      const breakdown = lexicalFallback(input);
+      const score = rubricToScore(breakdown);
+      models.lexical_heuristic = {
+        name: "Lexical overlap heuristic",
+        provider: "AcadIQ (offline)",
+        kind: "heuristic",
+        assigned_marks: scoreToMarks(score, maxMarks),
+        rubric_score: score,
+        rubric_breakdown: breakdown,
+        feedback:
+          "No AI juror was available, so this score is a word-overlap estimate against the reference answer. It cannot judge meaning or reasoning and must be reviewed by faculty before use.",
+      };
+    }
+
+    const jurors = Object.values(models);
+    const mean = (pick: (m: (typeof jurors)[number]) => number) =>
+      round(jurors.reduce((sum, m) => sum + pick(m), 0) / jurors.length);
+
+    const consensusBreakdown: RubricBreakdown = {
+      conceptual_accuracy: mean((m) => m.rubric_breakdown.conceptual_accuracy),
+      completeness: mean((m) => m.rubric_breakdown.completeness),
+      clarity: mean((m) => m.rubric_breakdown.clarity),
+      terminology: mean((m) => m.rubric_breakdown.terminology),
+    };
+    const consensusScore = rubricToScore(consensusBreakdown);
+    const consensusMarks = scoreToMarks(consensusScore, maxMarks);
+
+    const marks = jurors.map((m) => m.assigned_marks);
+    const spread = marks.length > 1 ? Math.max(...marks) - Math.min(...marks) : 0;
+    const variance = round(Math.min(100, (spread / maxMarks) * 100), 1);
+
+    const llmCount = jurors.filter((m) => m.kind === "llm").length;
+    const mode: NonNullable<DualResult["jury"]>["mode"] =
+      llmCount >= 2 ? "multi-model" : llmCount === 1 ? "single-model" : "heuristic";
+    const hasHighDiscrepancy = mode !== "multi-model" || variance > DISCREPANCY_THRESHOLD_PERCENT;
+
+    const recommendation =
+      mode === "multi-model"
+        ? variance > DISCREPANCY_THRESHOLD_PERCENT
+          ? `The ${llmCount} jurors disagree by ${variance}% of the available marks; review their rationales and decide the final mark manually.`
+          : `${llmCount} independent models agree within ${variance}% of the available marks. The consensus mark can be adopted, subject to faculty sign-off.`
+        : mode === "single-model"
+          ? `Only one AI juror responded (${failed.map((f) => f.name).join(", ") || "the second model"} was unavailable), so there is no cross-check. Treat this as a single opinion and review it.`
+          : "No AI juror was available; this is a lexical estimate only and must not be used as a grade without faculty review.";
 
     const result = dualResultSchema.parse({
       question: input.question,
       max_marks: maxMarks,
       student_answer: input.studentAnswer,
       reference_answer: input.modelAnswer,
+      jury: { mode, requested: env.openAiApiKey ? jurorIds.length : 0, responded: llmCount, failed },
       consensus: {
-        assigned_marks: assignedMarks,
-        percentage: Number(((assignedMarks / maxMarks) * 100).toFixed(1)),
-        rubric_overall_score: rubricScore,
-        rubric_breakdown: {
-          conceptual_accuracy: ca,
-          completeness: comp,
-          clarity: cla,
-          terminology: term,
-        },
-        variance_percentage: 100,
-        has_high_discrepancy: true,
-        recommendation: "The four-model jury was unavailable. This is a validated direct-provider or deterministic lexical fallback; faculty review is required.",
+        assigned_marks: consensusMarks,
+        percentage: round((consensusMarks / maxMarks) * 100, 1),
+        rubric_overall_score: consensusScore,
+        rubric_breakdown: consensusBreakdown,
+        variance_percentage: variance,
+        has_high_discrepancy: hasHighDiscrepancy,
+        recommendation,
       },
-      models: {
-        qwen_2_5: {
-          name: "Qwen/Qwen2.5-7B-Instruct",
-          assigned_marks: assignedMarks,
-          rubric_score: rubricScore,
-          rubric_breakdown: { conceptual_accuracy: ca, completeness: comp, clarity: cla, terminology: term },
-          feedback: feedback,
-        },
-        phi_3_5: {
-          name: "microsoft/Phi-3.5-mini-instruct",
-          assigned_marks: Number((assignedMarks * 1.01 > maxMarks ? maxMarks : assignedMarks * 1.01).toFixed(2)),
-          rubric_score: Number((rubricScore * 1.02 > 10 ? 10 : rubricScore * 1.02).toFixed(2)),
-          rubric_breakdown: {
-            conceptual_accuracy: ca,
-            completeness: Math.min(comp + 0.2, 10),
-            clarity: Math.min(cla + 0.3, 10),
-            terminology: term,
-          },
-          feedback: "Microsoft Phi-3.5 Mini Instruct highlights high conceptual clarity, logical protocol comparison, and accurate real-world application examples.",
-        },
-        mistral_7b: {
-          name: "mistralai/Mistral-7B-Instruct-v0.3",
-          assigned_marks: Number((assignedMarks * 0.98).toFixed(2)),
-          rubric_score: Number((rubricScore * 0.98).toFixed(2)),
-          rubric_breakdown: {
-            conceptual_accuracy: Math.max(ca - 0.2, 0),
-            completeness: comp,
-            clarity: cla,
-            terminology: term,
-          },
-          feedback: "Mistral 7B Instruct v0.3 confirms strong response quality with clear structural formatting and accurate domain terminology.",
-        },
-        llora_7b: {
-          name: "Arindamdas70/llora7B-finetuned",
-          assigned_marks: Number((assignedMarks * 1.02 > maxMarks ? maxMarks : assignedMarks * 1.02).toFixed(2)),
-          rubric_score: Number((rubricScore * 1.01 > 10 ? 10 : rubricScore * 1.01).toFixed(2)),
-          rubric_breakdown: {
-            conceptual_accuracy: Math.min(ca + 0.2, 10),
-            completeness: comp,
-            clarity: cla,
-            terminology: Math.min(term + 0.3, 10),
-          },
-          feedback: "Fine-tuned academic grader confirms high alignment with standard grading rubric criteria and domain language.",
-        },
-      },
+      models,
     });
+
     return withDualDecisionContract(result, input);
   },
 };

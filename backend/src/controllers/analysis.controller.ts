@@ -10,12 +10,14 @@ import {
   analyzeSimilaritySchema,
   questionReviewSchema,
   coMappingSchema,
+  fullAnalysisSchema,
 } from "../validators/analysis.validator";
 import { success } from "../utils/apiResponse";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { questionReviewService } from "../services/questionReview.service";
 import { coMappingService } from "../services/coMapping.service";
 import { dualEvaluationService } from "../services/dualEvaluation.service";
+import { fullAnalysisService } from "../services/fullAnalysis.service";
 import { extractPdfText } from "../ai/pdfTextExtractor";
 import { AppError } from "../middleware/error.middleware";
 
@@ -64,6 +66,15 @@ export const analysisController = {
     try {
       const input = coMappingSchema.parse(req.body);
       return success(res, await coMappingService.analyze(req.user!.userId, input), 201);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async analyzeFull(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const input = fullAnalysisSchema.parse(req.body);
+      return success(res, await fullAnalysisService.analyze(req.user!.userId, input), 201);
     } catch (err) {
       next(err);
     }

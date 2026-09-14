@@ -14,7 +14,7 @@ export default function AIResponseCard({ answer, reasoning, confidence, sources 
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2">
-          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary-700" />
+          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           <p className="text-small leading-relaxed text-foreground">{answer}</p>
         </div>
       </div>

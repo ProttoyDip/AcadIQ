@@ -7,6 +7,7 @@ const router = Router();
 
 router.use(authenticate, requireRole("FACULTY"));
 router.get("/", reportController.list);
+router.get("/:id/pdf", reportController.downloadPdf);
 router.get("/:id", reportController.getById);
 
 export default router;

@@ -21,6 +21,9 @@ services:
       - acadiq-network
 
   backend:
+    # Only started with `docker compose --profile full up`, so plain `up` never
+    # binds :5000 and shadows a locally running `npm run dev` backend.
+    profiles: ["full"]
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -64,6 +67,7 @@ services:
       - acadiq-network
 
   frontend:
+    profiles: ["full"]
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -97,6 +101,7 @@ services:
       - acadiq-network
 
   ai-service:
+    profiles: ["full"]
     build:
       context: ./ai_service
       dockerfile: Dockerfile
