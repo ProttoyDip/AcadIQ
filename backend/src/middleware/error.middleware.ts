@@ -25,7 +25,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   }
 
   if (err instanceof multer.MulterError) {
-    const message = err.code === "LIMIT_FILE_SIZE" ? "File exceeds the 10 MB limit" : err.message;
+    const message = err.code === "LIMIT_FILE_SIZE" ? "File exceeds the size limit" : err.code === "LIMIT_FILE_COUNT" ? "Too many files in one upload" : err.message;
     return failure(res, message, 400);
   }
 

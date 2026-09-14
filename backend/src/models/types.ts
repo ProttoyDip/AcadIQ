@@ -35,6 +35,9 @@ export interface AIExplanationResult {
   /** 0-100 stability across k samples; NULL when k = 1. Measures answer stability, not correctness. */
   modelAgreement?: number | null;
   sampleCount?: number;
+  /** How agreement was measured; cross-model disagreement is the stronger signal. */
+  agreementMode?: "self-consistency" | "cross-model";
+  agreementModels?: string[];
   /** Model-free retrieval signal (similarity only): best embedding cosine, 0-100. */
   retrievalSupport?: number | null;
   reliabilityNote?: string;

@@ -5,6 +5,7 @@ import { documentRepository } from "../repositories/document.repository";
 import { questionRepository } from "../repositories/question.repository";
 import { memoryRepository } from "../repositories/memory.repository";
 import { calculateDocumentCompleteness, ConfidenceEvidence } from "../ai/confidence";
+import { env } from "../config/env";
 
 export async function loadAnalysisContext(facultyId: number, courseId: number, questionPaperId: number) {
   const course = await courseRepository.findOwnedById(courseId, facultyId);
@@ -25,11 +26,20 @@ export async function loadSyllabusText(courseId: number) {
   if (!syllabus) {
     throw new AppError("Upload a syllabus for this course before running this analysis", 400);
   }
-  if (syllabus.extractedText?.trim()) return syllabus.extractedText;
+  if (syllabus.extractedText?.trim()) return fitSyllabusToPrompt(syllabus.extractedText);
   // Older rows were stored before text was persisted: parse once and backfill.
   const text = await extractDocumentText(syllabus.filePath, syllabus.mimeType);
   documentRepository.saveSyllabusText(syllabus.id, text).catch(() => undefined);
-  return text;
+  return fitSyllabusToPrompt(text);
+}
+
+/** Keeps prompts under the provider's per-request token limit; the cut is stated so the model doesn't assume completeness. */
+export function fitSyllabusToPrompt(text: string, limit = env.syllabusPromptChars): string {
+  const clean = text.replace(/\s+\n/g, "\n").trim();
+  if (clean.length <= limit) return clean;
+  const head = clean.slice(0, limit);
+  const cut = Math.max(head.lastIndexOf("\n"), head.lastIndexOf(". "));
+  return `${head.slice(0, cut > limit * 0.7 ? cut + 1 : limit).trim()}\n[Syllabus truncated to ${limit.toLocaleString()} of ${clean.length.toLocaleString()} characters for the AI prompt.]`;
 }
 
 interface ReliabilityOptions {

@@ -5,8 +5,8 @@ const courseOutcomeInput = z.object({
   description: z.string().trim().min(3).max(1000),
 });
 
-/** `fast` = one call (default). `verified` = k sampled calls with model-agreement reporting. */
-const reliability = z.enum(["fast", "verified"]).optional();
+/** `fast` = one call (default). `verified` = k sampled calls; `cross-model` = one call per configured vendor model. */
+const reliability = z.enum(["fast", "verified", "cross-model"]).optional();
 
 export const analyzeExamSchema = z.object({
   courseId: z.coerce.number().int().positive(),
@@ -25,6 +25,9 @@ export const analyzeSimilaritySchema = z.object({
   currentPaperId: z.coerce.number().int().positive(),
   previousPaperId: z.coerce.number().int().positive(),
   reliability,
+}).refine((value) => value.currentPaperId !== value.previousPaperId, {
+  message: "Choose two different papers: comparing a paper with itself is not meaningful",
+  path: ["previousPaperId"],
 });
 
 export const questionReviewSchema = analyzeExamSchema.extend({

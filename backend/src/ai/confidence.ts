@@ -104,7 +104,9 @@ export function applyCalculatedConfidence(
   const confidence = Math.min(evidenceSufficiency, modelAgreement ?? evidenceSufficiency);
   const agreementNote = modelAgreement === null
     ? "Model agreement not measured (single run)."
-    : `Model agreement ${modelAgreement}/100 across ${agreement!.sampleCount} independent samples${agreement!.has_high_discrepancy ? " — high discrepancy, review recommended" : ""}.`;
+    : agreement!.mode === "cross-model"
+      ? `Cross-model agreement ${modelAgreement}/100 between ${(agreement!.models ?? []).join(" and ")}${agreement!.has_high_discrepancy ? " — models disagree, review recommended" : ""}.`
+      : `Model agreement ${modelAgreement}/100 across ${agreement!.sampleCount} independent samples${agreement!.has_high_discrepancy ? " — high discrepancy, review recommended" : ""}.`;
   return {
     decision: explanation.decision.trim(),
     reason: explanation.reason.trim(),
@@ -113,6 +115,8 @@ export function applyCalculatedConfidence(
     evidenceBreakdown: breakdown,
     modelAgreement,
     sampleCount: agreement?.sampleCount ?? 1,
+    agreementMode: modelAgreement === null ? undefined : agreement?.mode ?? "self-consistency",
+    agreementModels: modelAgreement === null ? undefined : agreement?.models,
     retrievalSupport: reliability.retrievalSupport === undefined || reliability.retrievalSupport === null
       ? null
       : Math.round(reliability.retrievalSupport * 100),

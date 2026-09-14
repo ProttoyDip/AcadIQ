@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Wand2, Loader2, FlaskConical } from "lucide-react";
+import { Wand2, Loader2, FlaskConical, Presentation } from "lucide-react";
 import { useCourses, useCourse } from "../hooks/useCourses";
 import { reportService } from "../services/reportService";
 import { apiErrorMessage } from "../services/api";
@@ -13,11 +13,21 @@ import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Badge } from "../components/ui/badge";
 import GeneratedPaperReport from "../components/reports/GeneratedPaperReport";
+import TeachingMaterialsPanel from "../components/upload/TeachingMaterialsPanel";
+import { uploadService } from "../services/uploadService";
 import { BloomLevel, GeneratedPaperResult } from "../types";
 import { bloomLabel } from "../lib/format";
 
 const BLOOM_LEVELS: BloomLevel[] = ["REMEMBER", "UNDERSTAND", "APPLY", "ANALYZE", "EVALUATE", "CREATE"];
 const DEFAULT_BLOOM: Record<BloomLevel, number> = { REMEMBER: 10, UNDERSTAND: 20, APPLY: 30, ANALYZE: 20, EVALUATE: 10, CREATE: 10 };
+
+type Focus = "taught" | "balanced" | "syllabus";
+
+const FOCUS_OPTIONS: Array<{ value: Focus; label: string; hint: string }> = [
+  { value: "taught", label: "What I taught", hint: "Questions come from the selected slides/notes; the syllabus only bounds scope. Coverage is checked against the materials." },
+  { value: "balanced", label: "Balanced", hint: "Syllabus defines the questions; materials set depth, terminology and examples." },
+  { value: "syllabus", label: "Syllabus only", hint: "Ignore uploaded materials." },
+];
 
 /**
  * Constraint-solving paper generator: generate → verify with AcadIQ's own
@@ -33,6 +43,8 @@ export default function PaperGenerator() {
   const [passThreshold, setPassThreshold] = useState(75);
   const [maxIterations, setMaxIterations] = useState(2);
   const [bloom, setBloom] = useState<Record<BloomLevel, number>>(DEFAULT_BLOOM);
+  const [focus, setFocus] = useState<Focus>("balanced");
+  const [materialIds, setMaterialIds] = useState<number[]>([]);
   const [result, setResult] = useState<GeneratedPaperResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { data: feedbackStats } = useQuery({
@@ -40,10 +52,36 @@ export default function PaperGenerator() {
     queryFn: () => reportService.feedbackStats(Number(courseId)),
     enabled: Boolean(courseId),
   });
+  const { data: materials } = useQuery({
+    queryKey: ["materials", courseId ? Number(courseId) : null],
+    queryFn: () => uploadService.listTeachingMaterials(Number(courseId)),
+    enabled: Boolean(courseId),
+  });
+  // Default to every material in the course until the teacher narrows the selection.
+  useEffect(() => {
+    if (materials) setMaterialIds(materials.map((m) => m.id));
+  }, [materials]);
+  // Suggest "what I taught" when materials exist, but never override an explicit choice.
+  const [focusTouched, setFocusTouched] = useState(false);
+  useEffect(() => {
+    setFocusTouched(false);
+  }, [courseId]);
+  useEffect(() => {
+    if (!focusTouched && materials) setFocus(materials.length > 0 ? "taught" : "balanced");
+  }, [materials, focusTouched]);
 
   const generate = useMutation({
     mutationFn: () =>
-      reportService.generatePaper({ courseId: Number(courseId), questionCount, totalMarks, targetBloom: bloom, passThreshold, maxIterations }),
+      reportService.generatePaper({
+        courseId: Number(courseId),
+        questionCount,
+        totalMarks,
+        targetBloom: bloom,
+        passThreshold,
+        maxIterations,
+        focus,
+        materialIds: focus === "syllabus" ? undefined : materialIds,
+      }),
     onSuccess: (r) => {
       setResult(r);
       setError(null);
@@ -53,6 +91,7 @@ export default function PaperGenerator() {
 
   const bloomTotal = Object.values(bloom).reduce((a, b) => a + b, 0);
   const hasSyllabus = (course?.syllabusDocuments?.length ?? 0) > 0;
+  const taughtWithoutMaterials = focus === "taught" && materialIds.length === 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -80,6 +119,28 @@ export default function PaperGenerator() {
                 </SelectContent>
               </Select>
               {courseId && !hasSyllabus && <p className="text-xs text-error">This course has no syllabus uploaded; generation needs one.</p>}
+            </div>
+
+            <div className="space-y-2 rounded-lg border border-primary-200 bg-primary-50/30 p-3 dark:border-primary-800 dark:bg-primary-950/20">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-1.5"><Presentation className="h-3.5 w-3.5 text-primary" /> Source material — what you taught from</Label>
+                {materials && <Badge variant="outline" className="tabular-nums">{materialIds.length}/{materials.length} selected</Badge>}
+              </div>
+              <p className="text-[11px] text-muted-foreground">Upload the slides, notes or handouts for the lectures this paper should cover. Tick the ones to draw questions from.</p>
+              <TeachingMaterialsPanel courseId={courseId ? Number(courseId) : null} compact selectable={{ selectedIds: materialIds, onChange: setMaterialIds }} />
+              <div className="space-y-1.5 pt-1">
+                <Label>Ground questions in</Label>
+                <Select value={focus} onValueChange={(v) => { setFocus(v as Focus); setFocusTouched(true); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {FOCUS_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">{FOCUS_OPTIONS.find((o) => o.value === focus)?.hint}</p>
+                {taughtWithoutMaterials && <p className="text-xs text-warning">Select or upload at least one material, or switch to Balanced / Syllabus only.</p>}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -123,7 +184,7 @@ export default function PaperGenerator() {
             </div>
             <Button
               className="gap-2"
-              disabled={!courseId || !hasSyllabus || generate.isPending}
+              disabled={!courseId || !hasSyllabus || generate.isPending || taughtWithoutMaterials}
               onClick={() => generate.mutate()}
             >
               {generate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}

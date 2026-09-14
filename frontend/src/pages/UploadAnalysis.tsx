@@ -13,6 +13,8 @@ import Dropzone from "../components/upload/Dropzone";
 import FilePreviewCard from "../components/upload/FilePreviewCard";
 import ProcessingAnimation from "../components/upload/ProcessingAnimation";
 import AnalysisActions from "../components/analysis/AnalysisActions";
+import TeachingMaterialsPanel from "../components/upload/TeachingMaterialsPanel";
+import { UploadDuplicateWarning } from "../types";
 import { cn } from "../lib/utils";
 import {
   Dialog,
@@ -37,6 +39,7 @@ export default function UploadAnalysis() {
   const [paperFile, setPaperFile] = useState<File | null>(null);
   const [syllabusUploaded, setSyllabusUploaded] = useState(false);
   const [questionPaperId, setQuestionPaperId] = useState<number | null>(null);
+  const [duplicateWarnings, setDuplicateWarnings] = useState<UploadDuplicateWarning[]>([]);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,6 +79,7 @@ export default function UploadAnalysis() {
     try {
       const paper = await uploadQuestionPaper.mutateAsync({ courseId: Number(courseId), year, semester, file });
       setQuestionPaperId(paper.id);
+      setDuplicateWarnings(paper.duplicateWarnings ?? []);
     } catch (err) {
       setError(apiErrorMessage(err, "Question paper upload failed"));
     }
@@ -259,12 +263,46 @@ export default function UploadAnalysis() {
                 onRemove={() => {
                   setPaperFile(null);
                   setQuestionPaperId(null);
+                  setDuplicateWarnings([]);
                 }}
               />
             ) : (
               <Dropzone label="Draft Examination Paper" onFileAccepted={handlePaperFile} disabled={!canUpload} />
             )}
+            {duplicateWarnings.length > 0 && (
+              <div className="rounded-lg border border-warning-border bg-warning-bg/60 p-3 text-xs text-warning">
+                <p className="font-semibold">
+                  {duplicateWarnings.length} question{duplicateWarnings.length === 1 ? "" : "s"} near-duplicate earlier papers in this course (embedding cosine ≥ 0.90):
+                </p>
+                <ul className="mt-1.5 space-y-0.5">
+                  {duplicateWarnings.map((w) => (
+                    <li key={w.questionId} className="tabular-nums">
+                      Q{w.sequenceNumber} ≈ {w.matches.map((m) => `Q${m.sequenceNumber} (${m.semester} ${m.year}, ${m.cosine.toFixed(2)})`).join(", ")}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1.5 text-[11px] opacity-80">Model-free check at upload time; run Question Similarity for the AI explanation.</p>
+              </div>
+            )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Optional: what was actually taught */}
+      <Card className="shadow-xs">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 border-b border-border/60">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">+</span>
+            <div>
+              <CardTitle className="text-sm font-bold tracking-tight">Teaching Materials <span className="font-normal text-muted-foreground">(optional, recommended)</span></CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Lecture slides, notes and handouts. The Copilot cites them by slide, and the paper generator writes questions at the depth you actually taught.
+              </p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <TeachingMaterialsPanel courseId={courseId ? Number(courseId) : null} compact />
         </CardContent>
       </Card>
 

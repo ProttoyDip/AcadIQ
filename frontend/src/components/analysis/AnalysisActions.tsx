@@ -9,7 +9,7 @@ import {
   useReviewQuestions,
 } from "../../hooks/useAnalysis";
 import { apiErrorMessage } from "../../services/api";
-import { FullAnalysisResult } from "../../types";
+import { FullAnalysisResult, ReliabilityMode } from "../../types";
 import { Button } from "../ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { cn } from "../../lib/utils";
@@ -58,8 +58,8 @@ export default function AnalysisActions({
   const [result, setResult] = useState<FullAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [runningSingle, setRunningSingle] = useState<SingleKey | null>(null);
-  // Verified = 3 sampled calls per analysis with model-agreement reporting. Full audit is always fast (5 analyses × 3 = too many calls).
-  const [verified, setVerified] = useState(false);
+  // Single analyses can measure agreement; the full audit is always fast (5 analyses × k = too many calls).
+  const [reliability, setReliability] = useState<ReliabilityMode>("fast");
 
   const busy = full.isPending || runningSingle !== null;
 
@@ -86,7 +86,7 @@ export default function AnalysisActions({
     setRunningSingle(key);
     onStart?.();
     try {
-      const args = { courseId, questionPaperId, reliability: verified ? ("verified" as const) : ("fast" as const) };
+      const args = { courseId, questionPaperId, reliability };
       const outcome =
         key === "exam" ? await exam.mutateAsync(args)
         : key === "syllabus" ? await syllabus.mutateAsync({ courseId, questionPaperId })
@@ -124,9 +124,20 @@ export default function AnalysisActions({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <label className="ml-1 inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground" title="Runs the single analysis 3 times at higher temperature and reports how stable the answer was. Slower; uses ~3× the LLM budget.">
-          <input type="checkbox" className="h-3.5 w-3.5 accent-primary" checked={verified} onChange={(e) => setVerified(e.target.checked)} disabled={disabled || busy} />
-          Verified (3 samples, single analyses only)
+        <label className="ml-1 inline-flex items-center gap-2 text-xs text-muted-foreground">
+          Agreement
+          <select
+            aria-label="Reliability mode for single analyses"
+            className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+            value={reliability}
+            onChange={(e) => setReliability(e.target.value as ReliabilityMode)}
+            disabled={disabled || busy}
+            title="Applies to single analyses only. Verified: 3 samples of the same model at higher temperature. Cross-model: one call each to the primary and secondary vendor models."
+          >
+            <option value="fast">Fast (single run)</option>
+            <option value="verified">Verified (3 samples)</option>
+            <option value="cross-model">Cross-model (2 vendors)</option>
+          </select>
         </label>
       </div>
 

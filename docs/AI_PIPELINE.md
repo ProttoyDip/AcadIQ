@@ -32,7 +32,7 @@ flowchart LR
 ## Error handling
 
 | Failure | Handling |
-|---|---|
+| --- | --- |
 | Missing `OPENAI_API_KEY` | `AppError(503)` — "AI provider is not configured" |
 | LLM HTTP error | Logged, `AppError(502)` — "AI analysis request failed" |
 | Non-JSON / malformed LLM output | `AppError(502)` — "AI provider returned malformed JSON" |
@@ -58,7 +58,7 @@ Malformed provider output is normalized (including fenced JSON) and retried up t
 ## Intelligence analyses mapped to pipelines
 
 | Feature | Endpoint | Pipeline | Prompt |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Exam Quality Analyzer | `POST /api/analysis/exam` | `ai/pipeline/examAnalysisPipeline.ts` | `ai/prompts/examAnalysis.prompt.ts` |
 | Question Review | `POST /api/analysis/question-review` | `ai/pipeline/questionReviewPipeline.ts` | `ai/prompts/questionReview.prompt.ts` |
 | Course Outcome Mapping | `POST /api/analysis/co-mapping` | `ai/pipeline/coMappingPipeline.ts` | `ai/prompts/coMapping.prompt.ts` |
@@ -90,7 +90,7 @@ Every pipeline now calls one entry point, `ai/runner.ts#runLlmAnalysis(promptDes
 `confidence` used to be a single number that measured only how much input was uploaded. It is now split:
 
 | Field | Meaning | Source |
-|---|---|---|
+| --- | --- | --- |
 | `evidenceSufficiency` (0-100) | Input completeness: documents 30, question sample 25, syllabus 20, course outcomes 15, history 10. `evidenceBreakdown` shows the arithmetic. | Deterministic (`ai/confidence.ts`) |
 | `modelAgreement` (0-100 or **null**) | Stability of the answer across k independent samples. **null when k = 1** — a single run never claims agreement. This is *not* accuracy. | Self-consistency sampling |
 | `retrievalSupport` (0-100 or null) | Best embedding cosine behind a similarity result. | Model-free |
@@ -109,6 +109,14 @@ Requests accept `reliability: "fast" | "verified"` (default `fast` = one call at
 - Syllabus coverage, full question review, copilot: never sampled (long-in/long-out). `POST /analysis/full` is always `fast`.
 
 A process-wide semaphore (`ai/rateGate.ts`, `LLM_MAX_CONCURRENT`) bounds in-flight provider calls across all requests.
+
+**Cross-model agreement.** `reliability: "cross-model"` runs one low-temperature call each against the primary model and `DUAL_EVAL_SECONDARY_MODEL` and votes across them. Same-model self-consistency can pin near 100 % (observed with `gpt-oss-120b`); two vendors disagreeing is the stronger signal. The mode and participating models are recorded in `agreementMode` / `agreementModels` and on the provenance run (`model = "a+b"`).
+
+## Retrieval built on the embedding index
+
+- **Copilot RAG** (`services/copilot/rag.service.ts`): syllabi are split into ~500-char sentence-aware chunks (`syllabus_chunks`, embedded as `SYLLABUS_CHUNK`) at upload. Each turn embeds the user's message and retrieves the top-6 passages (cosine ≥ 0.25) and top-10 questions (≥ 0.30); the prompt leads with those and labels them. When nothing clears the floor or embeddings are unavailable it falls back to the full syllabus, and the response's `retrieval` block says so.
+- **Upload-time duplicate warning**: after a paper is indexed, every new question is compared against the rest of the course bank; matches at cosine ≥ `EMBEDDING_NEAR_DUPLICATE` are returned as `duplicateWarnings` on the upload response (model-free, never fails the upload).
+- **Nearest-neighbour search**: `GET /api/courses/:id/questions/search?q=…&k=10&floor=0.3` — "find questions like this" across the course, no LLM call.
 
 ### Provenance
 

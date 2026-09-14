@@ -2,6 +2,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { randomUUID } from "crypto";
+import { AppError } from "./error.middleware";
 
 const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -22,7 +23,7 @@ const storage = multer.diskStorage({
 function fileFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
   const extension = path.extname(file.originalname).toLowerCase();
   if (ALLOWED_FILE_TYPES.get(extension) !== file.mimetype) {
-    return cb(new Error("Only PDF and DOCX files are allowed"));
+    return cb(new AppError("Only PDF and DOCX files are allowed", 400));
   }
   cb(null, true);
 }
@@ -34,6 +35,29 @@ export const uploadDocument = multer({
 });
 
 export const uploadPdf = uploadDocument;
+
+// Teaching materials: slide decks and notes on top of PDF/DOCX.
+const MATERIAL_TYPES = new Map([
+  [".pdf", ["application/pdf"]],
+  [".docx", ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]],
+  [".pptx", ["application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/octet-stream"]],
+  [".txt", ["text/plain", "application/octet-stream"]],
+  [".md", ["text/markdown", "text/plain", "application/octet-stream"]],
+]);
+const MAX_MATERIAL_SIZE_BYTES = 40 * 1024 * 1024;
+
+export const uploadTeachingMaterial = multer({
+  storage,
+  limits: { fileSize: MAX_MATERIAL_SIZE_BYTES, files: 10 },
+  fileFilter: (_req, file, cb) => {
+    const extension = path.extname(file.originalname).toLowerCase();
+    const allowed = MATERIAL_TYPES.get(extension);
+    if (!allowed || !allowed.includes(file.mimetype)) {
+      return cb(new AppError("Teaching materials must be PDF, DOCX, PPTX, TXT or MD", 400));
+    }
+    cb(null, true);
+  },
+});
 
 const ALLOWED_SCHEME_MIMES = new Set([
   "application/pdf",
@@ -61,7 +85,7 @@ export const uploadReferenceScheme = multer({
     ) {
       cb(null, true);
     } else {
-      cb(new Error("Only PDF or text files (.pdf, .txt, .md) are allowed as marking schemes"));
+      cb(new AppError("Only PDF or text files (.pdf, .txt, .md) are allowed as marking schemes", 400));
     }
   },
 });

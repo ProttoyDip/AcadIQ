@@ -48,6 +48,8 @@ export const env = {
   dualEvalSecondaryModel: process.env.DUAL_EVAL_SECONDARY_MODEL ?? (isGroq ? "qwen/qwen3.8-27b" : "gpt-4o"),
   aiTimeoutMs: positiveInteger("AI_TIMEOUT_MS", 45_000),
   maxAiInputChars: positiveInteger("MAX_AI_INPUT_CHARS", 80_000),
+  /** Syllabus text is truncated to this many characters before entering any prompt (Groq free tier: ~8k tokens/request). */
+  syllabusPromptChars: positiveInteger("SYLLABUS_PROMPT_CHARS", isGroq ? 9_000 : 30_000),
   isGroq,
   embedding: {
     enabled: process.env.EMBEDDING_ENABLED !== "false",

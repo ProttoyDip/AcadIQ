@@ -1,7 +1,7 @@
 import { prisma } from "../database/prismaClient";
 import { bufferToVector, vectorToBuffer } from "../ai/embedding/vectorMath";
 
-export type EmbeddingOwnerType = "QUESTION" | "QUESTION_HISTORY" | "SYLLABUS_CHUNK" | "COURSE_OUTCOME";
+export type EmbeddingOwnerType = "QUESTION" | "QUESTION_HISTORY" | "SYLLABUS_CHUNK" | "TEACHING_CHUNK" | "COURSE_OUTCOME";
 
 export interface StoredVector {
   ownerId: number;

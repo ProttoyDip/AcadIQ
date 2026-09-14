@@ -1,0 +1,6 @@
+{
+  // Prisma migrations are MySQL; stop the MSSQL extension linting them as T-SQL.
+  "files.associations": {
+    "**/prisma/migrations/**/*.sql": "plaintext"
+  }
+}

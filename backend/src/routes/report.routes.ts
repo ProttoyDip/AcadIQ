@@ -11,6 +11,9 @@ router.get("/:id/pdf", reportController.downloadPdf);
 router.get("/:id/provenance", reportController.provenance);
 router.get("/:id/provenance/runs/:runId/samples/:sampleIndex", reportController.provenanceSample);
 router.post("/:id/reproduce", reportController.reproduce);
+router.get("/:id/paper.pdf", reportController.exportPaperPdf);
+router.get("/:id/paper.md", reportController.exportPaperText);
+router.post("/:id/adopt-paper", reportController.adoptPaper);
 router.get("/:id", reportController.getById);
 
 export default router;

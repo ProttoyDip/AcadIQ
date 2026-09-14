@@ -75,6 +75,7 @@ model Course {
   updatedAt         DateTime           @updatedAt @map("updated_at")
   faculty           User               @relation(fields: [facultyId], references: [id], onDelete: Cascade)
   syllabusDocuments SyllabusDocument[]
+  teachingMaterials TeachingMaterial[]
   questionPapers    QuestionPaper[]
   reports           AnalysisReport[]
   rubrics           Rubric[]
@@ -99,9 +100,58 @@ model SyllabusDocument {
   extractedText String?  @map("extracted_text") @db.LongText
   uploadedAt    DateTime @default(now()) @map("uploaded_at")
   course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  chunks        SyllabusChunk[]
 
   @@index([courseId, uploadedAt])
   @@map("syllabus_documents")
+}
+
+/// Retrieval unit for the Copilot: ~500-char passages of a syllabus, embedded as SYLLABUS_CHUNK.
+model SyllabusChunk {
+  id                 Int              @id @default(autoincrement())
+  syllabusDocumentId Int              @map("syllabus_document_id")
+  chunkIndex         Int              @map("chunk_index")
+  content            String           @db.Text
+  createdAt          DateTime         @default(now()) @map("created_at")
+  syllabusDocument   SyllabusDocument @relation(fields: [syllabusDocumentId], references: [id], onDelete: Cascade)
+
+  @@unique([syllabusDocumentId, chunkIndex])
+  @@map("syllabus_chunks")
+}
+
+/// Slides, lecture notes, handouts — what was actually taught. Chunked and embedded as TEACHING_CHUNK
+/// so the Copilot and the paper generator ground themselves in the delivered content, not just the syllabus.
+model TeachingMaterial {
+  id            Int                     @id @default(autoincrement())
+  courseId      Int                     @map("course_id")
+  title         String                  @db.VarChar(200)
+  originalName  String                  @map("original_name") @db.VarChar(255)
+  filePath      String                  @map("file_path") @db.VarChar(500)
+  mimeType      String                  @map("mime_type") @db.VarChar(100)
+  fileSize      Int                     @map("file_size")
+  kind          String                  @db.VarChar(20) // SLIDES | NOTES | HANDOUT | OTHER
+  extractedText String?                 @map("extracted_text") @db.LongText
+  chunkCount    Int                     @default(0) @map("chunk_count")
+  uploadedAt    DateTime                @default(now()) @map("uploaded_at")
+  course        Course                  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  chunks        TeachingMaterialChunk[]
+
+  @@index([courseId, uploadedAt])
+  @@map("teaching_materials")
+}
+
+model TeachingMaterialChunk {
+  id         Int              @id @default(autoincrement())
+  materialId Int              @map("material_id")
+  chunkIndex Int              @map("chunk_index")
+  /// Slide number or page hint parsed from the text, when available.
+  locator    String?          @db.VarChar(40)
+  content    String           @db.Text
+  createdAt  DateTime         @default(now()) @map("created_at")
+  material   TeachingMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, chunkIndex])
+  @@map("teaching_material_chunks")
 }
 
 model QuestionPaper {

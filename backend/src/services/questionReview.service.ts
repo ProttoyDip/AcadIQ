@@ -50,9 +50,16 @@ export const questionReviewService = {
             : question;
         }),
         explanation: labels?.agreement
-          ? { ...result.explanation, modelAgreement: labels.agreement.agreement, sampleCount: labels.agreement.sampleCount,
+          ? {
+              ...result.explanation,
+              modelAgreement: labels.agreement.agreement,
+              sampleCount: labels.agreement.sampleCount,
+              agreementMode: labels.agreement.mode ?? "self-consistency",
+              agreementModels: labels.agreement.models,
               confidence: Math.min(result.explanation.confidence, labels.agreement.agreement),
-              reliabilityNote: `${result.explanation.reliabilityNote ?? ""} Bloom-level agreement ${labels.agreement.agreement}/100 across ${labels.agreement.sampleCount} samples.`.trim() }
+              // The review prompt itself is never sampled; agreement here comes from the Bloom-label votes.
+              reliabilityNote: `${(result.explanation.reliabilityNote ?? "").replace(/\s*Model agreement not measured \(single run\)\.?/, "")} Bloom-level ${labels.agreement.mode === "cross-model" ? `cross-model agreement ${labels.agreement.agreement}/100 between ${(labels.agreement.models ?? []).join(" and ")}` : `agreement ${labels.agreement.agreement}/100 across ${labels.agreement.sampleCount} samples`}${labels.agreement.contested?.length ? ` (${labels.agreement.contested.length} contested)` : ""}.`.trim(),
+            }
           : result.explanation,
         labelAgreement: labels?.agreement ?? null,
       });

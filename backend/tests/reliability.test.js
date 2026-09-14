@@ -66,6 +66,27 @@ test("PII redaction strips emails, phones, student ids, name fields and known id
   assert.ok((redactions.knownIdentifier ?? 0) + (redactions.nameField ?? 0) >= 1);
 });
 
+test("Groq 413 is classified as retryable TPM exhaustion vs fatal oversized request", async () => {
+  const { classifyFailure } = require("../dist/ai/llmClient");
+  const groq = (message) => new Response(JSON.stringify({ error: { message } }), { status: 413 });
+  const budget = await classifyFailure(groq("Request too large for model `openai/gpt-oss-120b` in organization `org` on tokens per minute (TPM): Limit 8000, Requested 2900, please try again in 4.2s."));
+  assert.equal(budget.retryable, true);
+  assert.equal(budget.retryAfterMs, 4200);
+  assert.match(budget.message, /budget for this minute/);
+  const oversized = await classifyFailure(groq("Request too large for model `openai/gpt-oss-120b` on tokens per minute (TPM): Limit 8000, Requested 12450, please try again in 1s."));
+  assert.equal(oversized.retryable, false);
+  assert.match(oversized.message, /12,450 tokens but the AI provider allows 8,000/);
+  const rate = await classifyFailure(new Response(JSON.stringify({ error: { message: "Rate limit reached. Please try again in 850ms." } }), { status: 429 }));
+  assert.equal(rate.retryable, true);
+  assert.equal(rate.retryAfterMs, 850);
+});
+
+test("similarity validator rejects comparing a paper with itself", () => {
+  const { analyzeSimilaritySchema } = require("../dist/validators/analysis.validator");
+  assert.equal(analyzeSimilaritySchema.safeParse({ courseId: 1, currentPaperId: 5, previousPaperId: 5 }).success, false);
+  assert.equal(analyzeSimilaritySchema.safeParse({ courseId: 1, currentPaperId: 5, previousPaperId: 6 }).success, true);
+});
+
 test("prompt registry has every pipeline prompt and matches the checked-in snapshot", () => {
   const snapshot = JSON.parse(fs.readFileSync(path.join(__dirname, "promptHashes.snapshot.json"), "utf8"));
   const live = promptRegistrySnapshot();

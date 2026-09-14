@@ -33,7 +33,17 @@ export interface CopilotContext {
     marks: number;
     bloomLevel?: string | null;
     topic?: string | null;
+    relevance?: number;
   }>;
+  retrieval: {
+    method: "EMBEDDING" | "FULL_CONTEXT";
+    syllabusChunks: number;
+    syllabusChars: number;
+    materialChunks: number;
+    relevantQuestions: number[];
+    reason?: string;
+  };
+  materialPassages?: Array<{ title: string; kind: string; locator: string | null; content: string; similarity: number }>;
   examQuality?: { qualityScore: number; issues: unknown[]; recommendations: unknown[]; positivePoints: unknown[] };
   coCoverage?: { qualityScore: number; coverage: Record<string, number>; missingOutcomes: string[] };
   academicMemory?: {
@@ -57,13 +67,18 @@ export async function assembleContext(
   facultyId: number,
   courseId: number,
   examId: number | undefined,
-  reportId: number | undefined
+  reportId: number | undefined,
+  message = ""
 ): Promise<CopilotContext> {
-  const data = await retrieveAcademicData(facultyId, courseId, examId, reportId);
+  const data = await retrieveAcademicData(facultyId, courseId, examId, reportId, message);
 
   const sources: string[] = [];
-  if (data.syllabusExcerpt) sources.push("Course Syllabus");
+  if (data.syllabusExcerpt) sources.push(data.retrieval.method === "EMBEDDING" && data.retrieval.syllabusChunks > 0 ? `Course Syllabus (${data.retrieval.syllabusChunks} relevant passages)` : "Course Syllabus");
   if (data.courseOutcomes.length > 0) sources.push("Course Outcomes");
+  if (data.materialPassages.length > 0) {
+    const titles = [...new Set(data.materialPassages.map((p) => p.title))];
+    sources.push(`Teaching Materials (${titles.slice(0, 3).join(", ")}${titles.length > 3 ? ", …" : ""})`);
+  }
   if (data.paperMetadata) sources.push(`Question Paper (${data.paperMetadata.semester} ${data.paperMetadata.year})`);
   if (data.examQuality) sources.push("Exam Quality Report");
   if (data.coMapping) sources.push("CO Mapping Report");
@@ -78,6 +93,8 @@ export async function assembleContext(
     courseOutcomes: data.courseOutcomes,
     paperMetadata: data.paperMetadata,
     questions: data.questions,
+    retrieval: data.retrieval,
+    materialPassages: data.materialPassages,
     examQuality: data.examQuality,
     coCoverage: data.coMapping
       ? {

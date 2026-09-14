@@ -254,6 +254,32 @@ export const reportPdfService = {
         }
         break;
       }
+      case "GENERATED_PAPER": {
+        const v = result.verification ?? {};
+        heading(doc, "Verifier objective");
+        keyValue(doc, "Objective", `${num(v.objective)} / 100 · ${v.passed ? "passed" : "below"} the ${num(result.constraints?.passThreshold)} threshold`);
+        if (v.scores) {
+          table(doc, [{ header: "Component", width: 220 }, { header: "Score", width: 80 }, { header: "Weight", width: 80 }],
+            Object.entries(v.scores).map(([k, s]) => [k, num(s), `${num(v.weights?.[k])}%`]));
+        }
+        if (Array.isArray(v.violations) && v.violations.length) {
+          heading(doc, "Remaining violations");
+          v.violations.forEach((item: string) => bullet(doc, item, COLORS.medium));
+        }
+        if (Array.isArray(result.iterations)) {
+          heading(doc, "Generate → verify → repair trace");
+          result.iterations.forEach((it: any) => bullet(doc, `Iteration ${it.iteration}: ${num(it.objective)}/100 — ${it.passed ? "passed" : `${it.violations?.length ?? 0} violation(s)`}`));
+        }
+        heading(doc, str(result.paper?.title));
+        paragraph(doc, `Total marks ${num(v.marksTotal)} / ${num(result.constraints?.totalMarks)}. A student-facing copy without annotations is available via "Download question paper".`);
+        for (const q of [...(result.paper?.questions ?? [])].sort((a: any, b: any) => a.sequenceNumber - b.sequenceNumber)) {
+          doc.moveDown(0.3);
+          doc.font("Helvetica-Bold").fontSize(10).fillColor(COLORS.ink).text(`Q${q.sequenceNumber}. `, { continued: true });
+          doc.font("Helvetica").text(`${q.text}  [${q.marks} marks]`, { lineGap: 1 });
+          doc.font("Helvetica").fontSize(9).fillColor(COLORS.muted).text(`Bloom: ${str(q.intendedBloom)}${q.intendedOutcome ? ` · ${q.intendedOutcome}` : ""} · ${str(q.topic)}`);
+        }
+        break;
+      }
     }
 
     const issues = Array.isArray(result.issues) ? result.issues : [];

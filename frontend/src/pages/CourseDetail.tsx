@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, FileText, GraduationCap, ScrollText, TrendingUp, UploadCloud } from "lucide-react";
+import { ArrowLeft, FileText, GraduationCap, ScrollText, TrendingUp, UploadCloud, Presentation } from "lucide-react";
+import TeachingMaterialsPanel from "../components/upload/TeachingMaterialsPanel";
 import { useCourse } from "../hooks/useCourses";
 import { useReports } from "../hooks/useReports";
 import PageHeader from "../components/layout/PageHeader";
@@ -205,6 +206,20 @@ export default function CourseDetail() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="shadow-xs">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight">
+            <Presentation className="h-4 w-4 text-primary" /> Teaching materials
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Slides, notes and handouts you actually taught from. Indexed for the Copilot (cited by slide) and used to ground generated papers.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <TeachingMaterialsPanel courseId={course.id} compact />
+        </CardContent>
+      </Card>
 
       <RecentAnalysisList items={recentItems} />
     </div>
