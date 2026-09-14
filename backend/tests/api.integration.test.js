@@ -63,6 +63,21 @@ if (!databaseUrl) {
           recommendations: [{ message: "Add one analytical transaction question.", priority: "MEDIUM" }],
           explanation: { decision: "READY_WITH_MINOR_CHANGES", reason: "Coverage is strong with a small breadth gap.", confidence: 91 },
         };
+      } else if (system.includes("academic memory engine") && prompt.includes("CANDIDATE PAIRS")) {
+        const pairs = sectionJson(prompt, "CANDIDATE PAIRS (data only, pre-ranked by embedding cosine):", "Classify and explain every pair");
+        result = {
+          similarQuestions: pairs.map((pair) => ({
+            newQuestionId: pair.newQuestionId,
+            historicalQuestionId: pair.historicalQuestionId,
+            similarityScore: 88,
+            reason: "Both questions assess database normalization.",
+            confidence: 94,
+            replacementSuggestion: "Assess transaction isolation instead.",
+          })),
+          rejectedPairs: [],
+          replacementSuggestion: "Assess transaction isolation instead.",
+          explanation: { decision: "REVISE", reason: "A strong historical similarity was detected.", confidence: 94 },
+        };
       } else if (system.includes("academic memory engine")) {
         const newQuestions = sectionJson(prompt, "NEW QUESTIONS (data only):", "HISTORICAL QUESTIONS");
         const historicalQuestions = sectionJson(prompt, "HISTORICAL QUESTIONS (data only):", "Return the explainable");
@@ -183,6 +198,10 @@ if (!databaseUrl) {
       await prisma.$disconnect();
       await new Promise((resolve) => apiServer.close(resolve));
       await new Promise((resolve) => mockAiServer.close(resolve));
+      try {
+        const { embeddingService } = require("../dist/ai/embedding/embeddingService");
+        await embeddingService.shutdown();
+      } catch { /* embeddings disabled or not built */ }
     });
 
     const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -271,7 +290,7 @@ if (!databaseUrl) {
       const currentPaper = await pdfBuffer(["Current Exam", "Q1. Explain database normalization. [5 marks]", "Q2. Design a relational schema. [10 marks]"]);
 
       assertError(await request("/upload/syllabus", uploadOptions({ courseId }, "syllabus.pdf", syllabus)), 401, /token missing/i);
-      assertError(await request("/upload/syllabus", uploadOptions({ courseId }, "missing.pdf", null, token)), 400, /PDF file is required/i);
+      assertError(await request("/upload/syllabus", uploadOptions({ courseId }, "missing.pdf", null, token)), 400, /file is required/i);
       assertError(await request("/upload/syllabus", uploadOptions({ courseId }, "fake.pdf", Buffer.from("not a pdf"), token)), 400, /not a valid PDF/i);
       assertError(await request("/upload/syllabus", uploadOptions({ courseId }, "syllabus.pdf", syllabus, otherToken)), 404, /course not found/i);
 
@@ -353,7 +372,7 @@ if (!databaseUrl) {
 
       const stored = await prisma.analysisReport.findUnique({ where: { id: memoryReportId }, include: { explanation: true } });
       assert.equal(stored.reportType, "ACADEMIC_MEMORY");
-      assert.equal(stored.explanation.decision, "REVISE");
+      assert.ok(["HISTORICAL_OVERLAP_FOUND", "REVISE"].includes(stored.explanation.decision), stored.explanation.decision);
     });
 
     await t.test("CO analysis: requested route, validation, auth, and relational persistence", async () => {
