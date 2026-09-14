@@ -5,6 +5,7 @@ import { reportRepository } from "../../repositories/report.repository";
 import { extractDocumentText } from "../../ai/documentTextExtractor";
 import { AppError } from "../../middleware/error.middleware";
 import { AcademicMemoryResult, CoMappingResult, QuestionReviewResult, QuestionSimilarityResult } from "../../models/types";
+import { selectRelevantContext } from "./rag.service";
 
 /**
  * Step 1 of the retrieval flow: "Identify intent". A lightweight heuristic
@@ -41,7 +42,20 @@ export interface RetrievedAcademicData {
     marks: number;
     bloomLevel?: string | null;
     topic?: string | null;
+    /** Cosine to the user's message when RAG ranked this question as relevant. */
+    relevance?: number;
   }>;
+  /** How the syllabus/questions were chosen for this turn. */
+  retrieval: {
+    method: "EMBEDDING" | "FULL_CONTEXT";
+    syllabusChunks: number;
+    syllabusChars: number;
+    materialChunks: number;
+    relevantQuestions: number[];
+    reason?: string;
+  };
+  /** Passages from uploaded slides/notes ranked against the message. */
+  materialPassages: Array<{ title: string; kind: string; locator: string | null; content: string; similarity: number }>;
   examQuality?: { qualityScore: number; issues: unknown[]; recommendations: unknown[]; positivePoints: unknown[] };
   coMapping?: CoMappingResult;
   academicMemory?: AcademicMemoryResult;
@@ -59,7 +73,8 @@ export async function retrieveAcademicData(
   facultyId: number,
   courseId: number,
   examId?: number,
-  reportId?: number
+  reportId?: number,
+  message = ""
 ): Promise<RetrievedAcademicData> {
   const course = await courseRepository.findOwnedById(courseId, facultyId);
   if (!course) {
@@ -69,19 +84,22 @@ export async function retrieveAcademicData(
   const courseOutcomes = await courseRepository.findOutcomes(courseId);
 
   // Course Information: syllabus (non-fatal if unreadable/absent)
-  let syllabusExcerpt: string | undefined;
+  let syllabusText: string | undefined;
+  let syllabusDoc: { id: number; extractedText: string | null } | null = null;
   try {
-    const syllabusDoc = await documentRepository.findLatestSyllabus(courseId);
-    if (syllabusDoc) {
-      syllabusExcerpt = syllabusDoc.extractedText?.trim() || (await extractDocumentText(syllabusDoc.filePath, syllabusDoc.mimeType));
+    const doc = await documentRepository.findLatestSyllabus(courseId);
+    if (doc) {
+      syllabusText = doc.extractedText?.trim() || (await extractDocumentText(doc.filePath, doc.mimeType));
+      syllabusDoc = { id: doc.id, extractedText: syllabusText };
     }
   } catch {
-    syllabusExcerpt = undefined;
+    syllabusText = undefined;
   }
 
   // Course Information: the question paper this conversation is scoped to
   let paperMetadata: RetrievedAcademicData["paperMetadata"];
   let questions: RetrievedAcademicData["questions"] = [];
+  let rawQuestions: Array<{ id: number; questionText: string }> = [];
   let targetPaperId = examId;
   if (!targetPaperId) {
     const papers = await documentRepository.findQuestionPapersByCourse(courseId);
@@ -92,6 +110,7 @@ export async function retrieveAcademicData(
     if (paper && paper.courseId === courseId) {
       paperMetadata = { year: paper.year, semester: paper.semester, originalName: paper.originalName };
       const qs = await questionRepository.findByPaperId(paper.id);
+      rawQuestions = qs.map((q) => ({ id: q.id, questionText: q.questionText }));
       questions = qs.map((q) => ({
         sequenceNumber: q.sequenceNumber,
         questionText: q.questionText,
@@ -99,6 +118,42 @@ export async function retrieveAcademicData(
         bloomLevel: q.bloomLevel,
         topic: q.topic,
       }));
+    }
+  }
+
+  // RAG: the message decides which syllabus passages (and which questions) lead the prompt.
+  let syllabusExcerpt = syllabusText;
+  let materialPassages: RetrievedAcademicData["materialPassages"] = [];
+  let retrieval: RetrievedAcademicData["retrieval"] = {
+    method: "FULL_CONTEXT",
+    syllabusChunks: 0,
+    syllabusChars: syllabusText?.length ?? 0,
+    materialChunks: 0,
+    relevantQuestions: [],
+  };
+  if (message.trim()) {
+    const selection = await selectRelevantContext(message, courseId, syllabusDoc, rawQuestions);
+    if (selection.method === "EMBEDDING") {
+      const idToSeq = new Map(questions.map((q, index) => [rawQuestions[index]?.id, q]));
+      for (const hit of selection.questionIds) {
+        const q = idToSeq.get(hit.id);
+        if (q) q.relevance = hit.similarity;
+      }
+      if (selection.syllabusChunks.length) {
+        syllabusExcerpt = selection.syllabusChunks.map((c) => `[§${c.chunkIndex + 1}] ${c.content}`).join("\n…\n");
+      }
+      materialPassages = selection.materialChunks.map(({ title, kind, locator, content, similarity }) => ({ title, kind, locator, content, similarity }));
+      retrieval = {
+        method: "EMBEDDING",
+        syllabusChunks: selection.syllabusChunks.length,
+        syllabusChars: syllabusExcerpt?.length ?? 0,
+        materialChunks: materialPassages.length,
+        relevantQuestions: selection.questionIds
+          .map((hit) => idToSeq.get(hit.id)?.sequenceNumber)
+          .filter((n): n is number => n !== undefined),
+      };
+    } else {
+      retrieval.reason = selection.reason;
     }
   }
 
@@ -156,6 +211,8 @@ export async function retrieveAcademicData(
     syllabusExcerpt,
     paperMetadata,
     questions,
+    retrieval,
+    materialPassages,
     examQuality,
     coMapping,
     academicMemory,

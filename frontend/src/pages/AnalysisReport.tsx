@@ -223,7 +223,7 @@ export default function AnalysisReport() {
           <QuestionReviewReport result={report.resultJson as unknown as QuestionReviewResult} reportId={report.id} />
         )}
         {report.reportType === "GENERATED_PAPER" && (
-          <GeneratedPaperReport result={report.resultJson as unknown as GeneratedPaperResult} />
+          <GeneratedPaperReport result={report.resultJson as unknown as GeneratedPaperResult} reportId={report.id} />
         )}
         {(report.reportType === "ACADEMIC_MEMORY") && (
           <DecisionContractCard explanation={(report.resultJson as unknown as { explanation: AIExplanation }).explanation} />

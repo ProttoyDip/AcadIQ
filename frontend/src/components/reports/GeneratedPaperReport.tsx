@@ -2,6 +2,7 @@ import { FileText, Gauge, ListChecks, Repeat } from "lucide-react";
 import ScoreHero from "./ScoreHero";
 import ReliabilityCard from "./ReliabilityCard";
 import ReportSection from "./ReportSection";
+import GeneratedPaperActions from "./GeneratedPaperActions";
 import { Badge } from "../ui/badge";
 import { Progress } from "../ui/progress";
 import { GeneratedPaperResult } from "../../types";
@@ -19,10 +20,12 @@ const SCORE_LABELS: Record<string, string> = {
  * A generated paper is only as good as its verifier. This view leads with the
  * machine-checkable objective and the iteration trace, then the paper itself.
  */
-export default function GeneratedPaperReport({ result }: { result: GeneratedPaperResult }) {
+export default function GeneratedPaperReport({ result, reportId }: { result: GeneratedPaperResult; reportId?: number }) {
   const v = result.verification;
+  const id = reportId ?? result.reportId;
   return (
     <>
+      {id && <GeneratedPaperActions reportId={id} courseId={result.courseId} />}
       <ScoreHero
         score={v.objective}
         title="Verifier objective"
@@ -78,7 +81,7 @@ export default function GeneratedPaperReport({ result }: { result: GeneratedPape
         )}
       </ReportSection>
 
-      <ReportSection icon={Repeat} title="Generate → verify → repair trace" explanation={`${result.totalLlmCalls} LLM calls in total. Each iteration's verifier feedback was fed back into the next generation.`}>
+      <ReportSection icon={Repeat} title="Generate → verify → repair trace" explanation={`${result.totalLlmCalls} LLM calls in total. Each iteration's verifier feedback was fed back into the next generation.${result.grounding ? result.grounding.teachingMaterials > 0 ? ` Grounded in ${result.grounding.teachingMaterials} teaching material file${result.grounding.teachingMaterials === 1 ? "" : "s"} (${result.grounding.materialChunks} passages)${result.grounding.focus === "taught" ? " as the primary source; the syllabus only bounded scope and coverage was checked against the materials" : " plus the syllabus"}.` : " Grounded in the syllabus only — upload lecture slides or notes to generate at the depth you taught." : ""}`}>
         <ol className="space-y-2">
           {result.iterations.map((it) => (
             <li key={it.iteration} className={`rounded-lg border p-3 ${it.iteration === result.bestIteration ? "border-primary-300 bg-primary-50/40 dark:border-primary-800 dark:bg-primary-950/30" : "border-border"}`}>

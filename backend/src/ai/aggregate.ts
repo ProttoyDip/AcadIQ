@@ -13,6 +13,10 @@ export interface AgreementSummary {
   sampleCount: number;
   /** 0-100 stability of the answer across samples. NOT accuracy. */
   agreement: number;
+  /** How the samples were obtained. Cross-model disagreement is the stronger signal. */
+  mode?: "self-consistency" | "cross-model";
+  /** Distinct models that voted, when mode is cross-model. */
+  models?: string[];
   /** Numeric spread of the headline metric on its own scale, when it has one. */
   spread?: number;
   variance_percentage?: number;

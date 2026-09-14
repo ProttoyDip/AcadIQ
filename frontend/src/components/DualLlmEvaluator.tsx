@@ -77,6 +77,8 @@ interface MultiLlmEvaluationResponse {
     recommendation: string;
   };
   models: Record<string, ModelEvalResult>;
+  /** Counts of PII patterns scrubbed from the student answer before it reached any LLM. */
+  privacy?: { pii_redactions: Record<string, number> };
 }
 
 /** Visual palette cycled across whichever jurors respond; nothing here names a specific model. */
@@ -263,13 +265,17 @@ export const DualLlmEvaluator: React.FC = () => {
       formData.append('referenceFile', referenceFile);
       formData.append('studentFile', studentFile);
 
-      const res = await api.post<MultiLlmEvaluationResponse>('/analysis/dual-evaluate', formData);
-      setResult(res.data);
-      setOverrideMarks(res.data.consensus.assigned_marks);
+      const res = await api.post<{ success: boolean; data: MultiLlmEvaluationResponse } | MultiLlmEvaluationResponse>('/analysis/dual-evaluate', formData);
+      // The API wraps payloads as { success, data }; tolerate a bare payload too.
+      const payload = 'consensus' in res.data ? res.data : (res.data as { data: MultiLlmEvaluationResponse }).data;
+      if (!payload?.consensus) throw new Error('The evaluator returned an unexpected response shape.');
+      setResult(payload);
+      setOverrideMarks(payload.consensus.assigned_marks);
     } catch (err: any) {
       setError(
         err.response?.data?.message || 
         err.response?.data?.error?.message || 
+        err.message ||
         'Failed to complete the multi-model evaluation.'
       );
     } finally {
@@ -798,6 +804,11 @@ export const DualLlmEvaluator: React.FC = () => {
                     ) : (
                       <Badge variant="success" className="gap-1">
                         <CheckCircle2 className="w-3 h-3" /> Jurors agree (Δ {result.consensus.variance_percentage}%)
+                      </Badge>
+                    )}
+                    {result.privacy && Object.keys(result.privacy.pii_redactions).length > 0 && (
+                      <Badge variant="outline" className="gap-1" title={JSON.stringify(result.privacy.pii_redactions)}>
+                        <ShieldCheck className="w-3 h-3" /> {Object.values(result.privacy.pii_redactions).reduce((a, b) => a + b, 0)} PII item(s) redacted before AI
                       </Badge>
                     )}
                   </div>

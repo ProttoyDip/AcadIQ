@@ -17,6 +17,7 @@ import { LoadingState } from "../components/ui/loading-state";
 import { Input } from "../components/ui/input";
 import { QuestionSimilarityResult } from "../types";
 import { cn } from "../lib/utils";
+import SimilarQuestionSearch from "../components/memory/SimilarQuestionSearch";
 
 export default function QuestionMemory() {
   const { data: courses } = useCourses();
@@ -192,6 +193,8 @@ export default function QuestionMemory() {
         </CardContent>
       </Card>
 
+      <SimilarQuestionSearch courseId={courseId ? Number(courseId) : null} />
+
       <Card className="shadow-xs border-primary-100 dark:border-primary-900/60 bg-gradient-to-b from-card to-primary-50/20 dark:to-primary-950/20">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-sm font-bold tracking-tight">
@@ -205,7 +208,14 @@ export default function QuestionMemory() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold text-foreground">Candidate Paper (Draft)</Label>
-              <Select value={currentPaperId} onValueChange={setCurrentPaperId} disabled={!courseId}>
+              <Select
+                value={currentPaperId}
+                onValueChange={(value) => {
+                  setCurrentPaperId(value);
+                  if (value === previousPaperId) setPreviousPaperId("");
+                }}
+                disabled={!courseId}
+              >
                 <SelectTrigger className="h-9 text-xs">
                   <SelectValue placeholder="Select candidate paper..." />
                 </SelectTrigger>
@@ -247,7 +257,7 @@ export default function QuestionMemory() {
           <div className="flex justify-start">
             <Button
               onClick={runSimilarityCheck}
-              disabled={!currentPaperId || !previousPaperId || analyzeSimilarity.isPending}
+              disabled={!currentPaperId || !previousPaperId || currentPaperId === previousPaperId || analyzeSimilarity.isPending}
               size="sm"
               className="text-xs font-semibold gap-2"
             >

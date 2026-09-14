@@ -15,10 +15,18 @@ import { courseRepository } from "../repositories/course.repository";
 import { reportRepository } from "../repositories/report.repository";
 import { prisma } from "../database/prismaClient";
 import { logger } from "../utils/logger";
-import { loadReliabilityEvidence, loadSyllabusText } from "./analysisContext.service";
+import { loadReliabilityEvidence, loadSyllabusText, fitSyllabusToPrompt } from "./analysisContext.service";
 import { tracedAnalysis } from "./traced";
+import { teachingMaterialService } from "./teachingMaterial.service";
 
 const BLOOM_LEVELS = ["REMEMBER", "UNDERSTAND", "APPLY", "ANALYZE", "EVALUATE", "CREATE"] as const;
+const AVOID_LIST_LIMIT = 25;
+const AVOID_TEXT_CHARS = 160;
+// Groq free tier is ~8k tokens/request; syllabus (≤9k chars) + this stays inside it.
+const MATERIAL_EXCERPT_CHARS = 5_000;
+// "taught" focus: shrink the syllabus to scope-only and hand its budget to the slides/notes.
+const MATERIAL_EXCERPT_CHARS_TAUGHT = 11_000;
+const SYLLABUS_CHARS_WHEN_TAUGHT = 2_500;
 
 export const generatePaperSchema = z.object({
   courseId: z.coerce.number().int().positive(),
@@ -30,6 +38,10 @@ export const generatePaperSchema = z.object({
   outcomeWeights: z.record(z.string().trim().min(1).max(30), z.number().min(0).max(100)).optional(),
   passThreshold: z.coerce.number().min(50).max(100).default(75),
   maxIterations: z.coerce.number().int().min(1).max(3).default(2),
+  /** Restrict grounding to these uploaded materials; omit to use every material in the course. */
+  materialIds: z.array(z.coerce.number().int().positive()).max(50).optional(),
+  /** `taught` leans on slides/notes (syllabus only for scope); `syllabus` ignores materials; `balanced` uses both. */
+  focus: z.enum(["taught", "balanced", "syllabus"]).default("balanced"),
 });
 export type GeneratePaperInput = z.infer<typeof generatePaperSchema>;
 
@@ -118,6 +130,18 @@ export const paperGeneratorService = {
       const bankVectors = embeddingService.available && bank.length
         ? await embeddingService.ensureIndexed("QUESTION", bank.map((q) => ({ id: q.id, text: q.questionText, courseId: input.courseId })))
         : null;
+      // The prompt only needs a short AVOID list; the embedding verifier catches the rest deterministically.
+      const avoidQuestions = bank.slice(0, AVOID_LIST_LIMIT).map((q) => q.questionText.replace(/\s+/g, " ").trim().slice(0, AVOID_TEXT_CHARS));
+      // What was actually taught: sampled evenly across the chosen decks/notes, within the token budget.
+      const materialBudget = input.focus === "syllabus" ? 0 : input.focus === "taught" ? MATERIAL_EXCERPT_CHARS_TAUGHT : MATERIAL_EXCERPT_CHARS;
+      const materials = materialBudget
+        ? await teachingMaterialService.excerptForGeneration(input.courseId, materialBudget, input.materialIds)
+        : { text: "", materials: 0, chunks: 0 };
+      if (input.focus === "taught" && !materials.text) {
+        throw new AppError("No teaching materials are available to generate from. Upload lecture slides or notes, or switch the focus to syllabus.", 422);
+      }
+      // With a "taught" focus the syllabus is scope only, so give its budget to the materials.
+      const syllabusForPrompt = input.focus === "taught" ? fitSyllabusToPrompt(syllabusText, SYLLABUS_CHARS_WHEN_TAUGHT) : syllabusText;
 
       const iterations: GenerationIteration[] = [];
       let feedback: string | undefined;
@@ -128,10 +152,12 @@ export const paperGeneratorService = {
         const generation = await runLlmAnalysis(
           PAPER_GENERATION_PROMPT,
           [{
-            syllabusText,
+            syllabusText: syllabusForPrompt,
+            teachingMaterialText: materials.text || undefined,
+            focus: input.focus,
             courseOutcomes: outcomes,
             constraints: { questionCount: input.questionCount, totalMarks: input.totalMarks, targetBloom, outcomeWeights },
-            avoidQuestions: bank.map((q) => q.questionText),
+            avoidQuestions,
             feedback,
             previousQuestions: previous?.questions.map(({ sequenceNumber, text, marks }) => ({ sequenceNumber, text, marks })),
           }],
@@ -141,7 +167,12 @@ export const paperGeneratorService = {
         );
         totalLlmCalls += 1;
         const candidate = generation.consensus;
-        const verification = await verify(candidate, { syllabusText, outcomes, targetBloom, outcomeWeights, input, bankVectors });
+        const verification = await verify(candidate, {
+          syllabusText,
+          // A "taught" paper is measured against what was taught, not the whole syllabus.
+          coverageText: input.focus === "taught" && materials.text ? materials.text : syllabusText,
+          outcomes, targetBloom, outcomeWeights, input, bankVectors,
+        });
         totalLlmCalls += verification.llmCalls;
         const nextFeedback = verification.passed ? null : verification.violations.map((v, i) => `${i + 1}. ${v}`).join("\n");
         iterations.push({ iteration, candidate, verification, feedback: nextFeedback });
@@ -175,6 +206,7 @@ export const paperGeneratorService = {
         iterations: iterations.map((it) => ({ iteration: it.iteration, objective: it.verification.objective, passed: it.verification.passed, violations: it.verification.violations, feedback: it.feedback, questionCount: it.candidate.questions.length })),
         bestIteration: best.iteration,
         totalLlmCalls,
+        grounding: { focus: input.focus, teachingMaterials: materials.materials, materialChunks: materials.chunks, materialChars: materials.text.length, syllabusChars: syllabusForPrompt.length, materialIds: input.materialIds ?? null },
         explanation,
       });
       const report = await reportRepository.createExplainable(
@@ -191,6 +223,7 @@ async function verify(
   candidate: Candidate,
   ctx: {
     syllabusText: string;
+    coverageText: string;
     outcomes: Array<{ code: string; description: string }>;
     targetBloom: Record<string, number>;
     outcomeWeights?: Record<string, number>;
@@ -238,8 +271,8 @@ async function verify(
     for (const id of co.unmappedQuestionIds) violations.push(`Q${id} does not map to any course outcome.`);
   }
 
-  // Verifier 3: syllabus coverage.
-  const coverage = await runSyllabusCoveragePipeline(ctx.syllabusText, candidate.questions.map((q) => `- ${q.text}`).join("\n"));
+  // Verifier 3: coverage of the grounding text (syllabus, or the taught material when focus = taught).
+  const coverage = await runSyllabusCoveragePipeline(ctx.coverageText, candidate.questions.map((q) => `- ${q.text}`).join("\n"));
   llmCalls += 1;
   const syllabusCoverage = Math.round(coverage.coveragePercentage);
   if (coverage.missingTopics.length > Math.ceil(ctx.input.questionCount / 2)) {

@@ -42,7 +42,7 @@ export const documentRepository = {
       mimeType: string;
       fileSize: number;
     },
-    questions: { sequenceNumber: number; questionText: string; marks: number }[]
+    questions: { sequenceNumber: number; questionText: string; marks: number; bloomLevel?: string; topic?: string }[]
   ) {
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const paper = await tx.questionPaper.create({ data });

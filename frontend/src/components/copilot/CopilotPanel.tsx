@@ -7,6 +7,7 @@ import { Input } from "../ui/input";
 import ChatMessage from "./ChatMessage";
 import QuickActionButton from "./QuickActionButton";
 import TypingIndicator from "./TypingIndicator";
+import { CopilotRetrieval } from "../../types";
 
 interface Turn {
   role: "USER" | "ASSISTANT";
@@ -14,6 +15,7 @@ interface Turn {
   reasoning?: string | null;
   confidence?: number | null;
   sources?: string[];
+  retrieval?: CopilotRetrieval;
 }
 
 interface CopilotPanelProps {
@@ -78,7 +80,7 @@ export default function CopilotPanel({ courseId, examId, reportId, contextLabel 
       if (!sessionId) setSessionId(result.sessionId);
       setTurns((prev) => [
         ...prev,
-        { role: "ASSISTANT", content: result.answer, reasoning: result.reasoning, confidence: result.confidence, sources: result.sources },
+        { role: "ASSISTANT", content: result.answer, reasoning: result.reasoning, confidence: result.confidence, sources: result.sources, retrieval: result.retrieval },
       ]);
     } catch (err) {
       setError(apiErrorMessage(err, "AcadIQ Copilot could not respond"));
@@ -138,7 +140,16 @@ export default function CopilotPanel({ courseId, examId, reportId, contextLabel 
         ) : (
           <div className="flex flex-col gap-4">
             {turns.map((t, i) => (
-              <ChatMessage key={i} role={t.role} content={t.content} reasoning={t.reasoning} confidence={t.confidence} sources={t.sources} />
+              <div key={i} className="flex flex-col gap-1">
+                <ChatMessage role={t.role} content={t.content} reasoning={t.reasoning} confidence={t.confidence} sources={t.sources} />
+                {t.role === "ASSISTANT" && t.retrieval && (
+                  <p className="px-1 text-[11px] text-muted-foreground">
+                    {t.retrieval.method === "EMBEDDING"
+                      ? `Retrieved for this message: ${t.retrieval.syllabusChunks > 0 ? `${t.retrieval.syllabusChunks} syllabus passage${t.retrieval.syllabusChunks === 1 ? "" : "s"}` : "full syllabus (no passage stood out)"}${t.retrieval.relevantQuestions.length ? `, most relevant ${t.retrieval.relevantQuestions.map((n) => `Q${n}`).join(", ")}` : ""}`
+                      : `Full-context mode (semantic retrieval unavailable${t.retrieval.reason ? `: ${t.retrieval.reason}` : ""})`}
+                  </p>
+                )}
+              </div>
             ))}
             {chat.isPending && <TypingIndicator />}
           </div>

@@ -5,7 +5,7 @@
   "course-outcome-mapping": "v1@4ffbb4c06bd45fe8123b3eab833e234594cbd5d5f97c5b2c381adf1ee9a3db69",
   "dual-evaluation": "v2@8ed62848d7388fa081e582fd665c0d9e0a765d11a3e805a2c26b90982efbe010",
   "exam-quality": "v1@dbbf321673b99e07ff045435339e6d6df58a37deae2620ce9c142a4abb220f79",
-  "paper-generation": "v1@a3076283550a5a9e769d345be0056a06cb300705016255b46dcf61d080427cd8",
+  "paper-generation": "v3@c625ed4c1575a76d7fdffb213b828774b61797cb56ff57fffb8b8c8738afc7b7",
   "question-review": "v1@d9f535a9f6f3be0e196c7963c8013d4121a76f7e40be7fc636034792d3512f2e",
   "question-similarity": "v1@337eca1f7e0a770a5e93e7cb6ab6846718b01f4937e786897a2b622c57137984",
   "question-similarity-candidates": "v1@2f37d87f965812d174fde3adf0641885eec3f571804ef0fe5f73bbb08b4bc037",

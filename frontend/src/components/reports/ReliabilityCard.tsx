@@ -57,13 +57,15 @@ export default function ReliabilityCard({ explanation }: { explanation: AIExplan
           </div>
           {agreement === null ? (
             <div className="rounded-md border border-dashed border-border px-2.5 py-1.5 text-[11px] text-muted-foreground">
-              Not measured — single run. Re-run with <span className="font-semibold">Verified</span> reliability to sample the model {explanation.sampleCount && explanation.sampleCount > 1 ? "" : "3×"} and measure stability.
+              Not measured — single run. Re-run as <span className="font-semibold">Verified</span> (3 samples) or <span className="font-semibold">Cross-model</span> (two vendors) to measure stability.
             </div>
           ) : (
             <>
               <Progress value={agreement} tone={tone(agreement)} className="h-2 rounded-full" />
               <p className="text-[11px] text-muted-foreground">
-                Stability across {explanation.sampleCount} independent samples — not accuracy.
+                {explanation.agreementMode === "cross-model"
+                  ? `Agreement between ${(explanation.agreementModels ?? []).join(" and ")} — two vendors, not accuracy.`
+                  : `Stability across ${explanation.sampleCount} independent samples — not accuracy.`}
               </p>
             </>
           )}

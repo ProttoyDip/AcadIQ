@@ -19,6 +19,24 @@ export interface SyllabusDocument {
   uploadedAt: string;
 }
 
+export interface TeachingMaterial {
+  id: number;
+  title: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  kind: "SLIDES" | "NOTES" | "HANDOUT" | "OTHER";
+  chunkCount: number;
+  uploadedAt: string;
+  textChars?: number;
+}
+
+export interface UploadDuplicateWarning {
+  questionId: number;
+  sequenceNumber: number;
+  matches: Array<{ questionId: number; paperId: number; sequenceNumber: number; semester: string; year: number; cosine: number }>;
+}
+
 export interface QuestionPaper {
   id: number;
   courseId: number;
@@ -29,6 +47,30 @@ export interface QuestionPaper {
   fileSize: number;
   uploadedAt: string;
   questions?: Question[];
+  /** Present on upload responses: new questions that near-duplicate the existing course bank. */
+  duplicateWarnings?: UploadDuplicateWarning[];
+}
+
+export interface NeighbourHit {
+  questionId: number;
+  questionText: string;
+  paperId: number;
+  sequenceNumber: number;
+  semester: string;
+  year: number;
+  bloomLevel: string | null;
+  topic: string | null;
+  cosine: number;
+  nearDuplicate: boolean;
+}
+
+export interface CopilotRetrieval {
+  method: "EMBEDDING" | "FULL_CONTEXT";
+  syllabusChunks: number;
+  syllabusChars: number;
+  materialChunks?: number;
+  relevantQuestions: number[];
+  reason?: string;
 }
 
 export interface Question {
@@ -65,12 +107,14 @@ export interface AIExplanation {
   evidenceBreakdown?: EvidenceBreakdown;
   modelAgreement?: number | null;
   sampleCount?: number;
+  agreementMode?: "self-consistency" | "cross-model";
+  agreementModels?: string[];
   retrievalSupport?: number | null;
   reliabilityNote?: string;
   reliabilityVersion?: 2;
 }
 
-export type ReliabilityMode = "fast" | "verified";
+export type ReliabilityMode = "fast" | "verified" | "cross-model";
 
 interface ExplainableResult extends AIExplanation {
   explanation: AIExplanation;
@@ -306,6 +350,7 @@ export interface GeneratedPaperResult extends ExplainableResult {
   iterations: Array<{ iteration: number; objective: number; passed: boolean; violations: string[]; feedback: string | null; questionCount: number }>;
   bestIteration: number;
   totalLlmCalls: number;
+  grounding?: { focus?: "taught" | "balanced" | "syllabus"; teachingMaterials: number; materialChunks: number; materialChars: number; syllabusChars: number; materialIds?: number[] | null };
 }
 
 export type FullAnalysisKey = "examQuality" | "syllabusCoverage" | "questionReview" | "coMapping" | "similarity";
@@ -338,6 +383,7 @@ export interface CopilotChatResponse {
   reasoning: string;
   confidence: number;
   sources: string[];
+  retrieval?: CopilotRetrieval;
   createdAt: string;
 }
 

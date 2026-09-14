@@ -47,6 +47,8 @@ export const env = {
   openAiModel: process.env.OPENAI_MODEL ?? (isGroq ? "llama-3.3-70b-versatile" : "gpt-4o-mini"),
   aiTimeoutMs: positiveInteger("AI_TIMEOUT_MS", 45_000),
   maxAiInputChars: positiveInteger("MAX_AI_INPUT_CHARS", 80_000),
+  /** Syllabus text is truncated to this many characters before entering any prompt (Groq free tier: ~8k tokens/request). */
+  syllabusPromptChars: positiveInteger("SYLLABUS_PROMPT_CHARS", isGroq ? 9_000 : 30_000),
   isGroq,
   embedding: {
     enabled: process.env.EMBEDDING_ENABLED !== "false",

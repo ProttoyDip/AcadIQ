@@ -21,8 +21,9 @@ export interface ChatMessage {
  * each attempt. Non-429 failures (transient 5xx, network blips) keep the
  * original fast retry — those really do often clear in milliseconds.
  */
-function backoffDelayMs(attempt: number, response?: Response): number {
-  if (response?.status === 429) {
+function backoffDelayMs(attempt: number, response?: Response, hintMs?: number | null): number {
+  if (hintMs && hintMs > 0) return Math.min(hintMs + 250, 20_000);
+  if (response?.status === 429 || response?.status === 413) {
     const retryAfter = Number(response.headers.get("retry-after"));
     if (Number.isFinite(retryAfter) && retryAfter > 0) {
       return Math.min(retryAfter * 1000, 15_000);
@@ -30,6 +31,59 @@ function backoffDelayMs(attempt: number, response?: Response): number {
     return 2_000 * (attempt + 1);
   }
   return 250 * (attempt + 1);
+}
+
+interface ProviderFailure {
+  message: string;
+  /** True when waiting and retrying can succeed (429, or a 413 that is really a per-minute budget). */
+  retryable: boolean;
+  retryAfterMs: number | null;
+  detail?: string;
+}
+
+/**
+ * Groq reports both "request exceeds the model's per-request token limit" and
+ * "you have exhausted this minute's token budget" as HTTP 413. Only the first
+ * is fatal; the second should be waited out like a 429. The body tells them apart:
+ *   "... on tokens per minute (TPM): Limit 8000, Requested 2900, please try again in 4.2s"
+ */
+export async function classifyFailure(response: Response): Promise<ProviderFailure> {
+  let detail = "";
+  try {
+    const body = (await response.json()) as { error?: { message?: string } | string };
+    detail = typeof body.error === "string" ? body.error : body.error?.message ?? "";
+  } catch {
+    detail = "";
+  }
+  const wait = detail.match(/try again in\s*([\d.]+)\s*(ms|s|m)\b/i);
+  const retryAfterMs = wait ? Math.round(Number(wait[1]) * (wait[2] === "ms" ? 1 : wait[2] === "m" ? 60_000 : 1000)) : null;
+
+  if (response.status === 429) {
+    return { message: "AI provider rate limit reached (HTTP 429) — please retry in a minute", retryable: true, retryAfterMs, detail };
+  }
+  if (response.status === 413) {
+    const limits = detail.match(/Limit\s*([\d,]+).*?Requested\s*([\d,]+)/i);
+    const limit = limits ? Number(limits[1].replace(/,/g, "")) : null;
+    const requested = limits ? Number(limits[2].replace(/,/g, "")) : null;
+    const perMinute = /per minute|TPM|RPM/i.test(detail);
+    if (perMinute && limit !== null && requested !== null && requested <= limit) {
+      return {
+        message: `AI provider token budget for this minute is used up (${requested.toLocaleString()} of ${limit.toLocaleString()} tokens/min) — please retry shortly`,
+        retryable: true,
+        retryAfterMs,
+        detail,
+      };
+    }
+    return {
+      message: requested !== null && limit !== null
+        ? `This request needs ~${requested.toLocaleString()} tokens but the AI provider allows ${limit.toLocaleString()} per request. Reduce the syllabus or question count and retry.`
+        : "This request is too large for the AI provider's per-request limit. Reduce the syllabus or question count and retry.",
+      retryable: false,
+      retryAfterMs: null,
+      detail,
+    };
+  }
+  return { message: `AI provider returned HTTP ${response.status}`, retryable: response.status >= 500, retryAfterMs: null, detail };
 }
 
 export async function callLlmChat(messages: ChatMessage[]): Promise<string> {
@@ -66,9 +120,12 @@ export async function callLlmChat(messages: ChatMessage[]): Promise<string> {
     }
 
     if (!response.ok) {
-      lastFailure = `AI provider returned HTTP ${response.status}`;
-      logger.warn("llm_copilot_request_attempt_failed", { attempt: attempt + 1, statusCode: response.status });
-      if (response.status < 500 && response.status !== 429) break;
+      const failure = await classifyFailure(response);
+      lastFailure = failure.message;
+      logger.warn("llm_copilot_request_attempt_failed", { attempt: attempt + 1, statusCode: response.status, retryable: failure.retryable });
+      if (!failure.retryable) break;
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, response, failure.retryAfterMs)));
+      continue;
     } else {
       try {
         const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
@@ -143,9 +200,12 @@ export async function callLlmChatJson<T>(messages: ChatMessage[]): Promise<T> {
     }
 
     if (!response.ok) {
-      lastFailure = `AI provider returned HTTP ${response.status}`;
-      logger.warn("llm_copilot_json_attempt_failed", { attempt: attempt + 1, statusCode: response.status });
-      if (response.status < 500 && response.status !== 429) break;
+      const failure = await classifyFailure(response);
+      lastFailure = failure.message;
+      logger.warn("llm_copilot_json_attempt_failed", { attempt: attempt + 1, statusCode: response.status, retryable: failure.retryable });
+      if (!failure.retryable) break;
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, response, failure.retryAfterMs)));
+      continue;
     } else {
       try {
         const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
@@ -298,17 +358,21 @@ export async function callLlmJsonWithMeta<T>(
       continue;
     }
     if (!response.ok) {
-      lastFailure =
-        response.status === 429
-          ? "AI provider rate limit reached (HTTP 429) — please retry in a minute"
-          : `AI provider returned HTTP ${response.status}`;
+      const remaining = headerNumber(response, "x-ratelimit-remaining-tokens");
+      const failure = await classifyFailure(response);
+      lastFailure = failure.message;
       logger.warn("llm_request_attempt_failed", {
         attempt: attempt + 1,
         statusCode: response.status,
         model,
-        remainingTokens: headerNumber(response, "x-ratelimit-remaining-tokens"),
+        remainingTokens: remaining,
+        promptChars: systemPrompt.length + userPrompt.length,
+        retryable: failure.retryable,
+        detail: failure.detail?.slice(0, 200),
       });
-      if (response.status < 500 && response.status !== 429) break;
+      if (!failure.retryable) break;
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, response, failure.retryAfterMs)));
+      continue;
     } else {
       try {
         const body = (await response.json()) as ChatCompletionBody;

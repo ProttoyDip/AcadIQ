@@ -1,5 +1,5 @@
 import { api } from "./api";
-import { AnalysisReport, FeedbackStats, GeneratedPaperResult, QuestionFeedback, ReportProvenance, ReproduceResult } from "../types";
+import { AnalysisReport, FeedbackStats, GeneratedPaperResult, QuestionFeedback, QuestionPaper, ReportProvenance, ReproduceResult, UploadDuplicateWarning } from "../types";
 
 export const reportService = {
   list: () => api.get<{ data: AnalysisReport[] }>("/reports").then((r) => r.data.data),
@@ -29,6 +29,8 @@ export const reportService = {
     outcomeWeights?: Record<string, number>;
     passThreshold?: number;
     maxIterations?: number;
+    materialIds?: number[];
+    focus?: "taught" | "balanced" | "syllabus";
   }) => api.post<{ data: GeneratedPaperResult }>("/analysis/generate-paper", payload).then((r) => r.data.data),
   downloadPdf: async (id: number) => {
     const response = await api.get<Blob>(`/reports/${id}/pdf`, { responseType: "blob" });
@@ -36,4 +38,13 @@ export const reportService = {
     const match = /filename="?([^";]+)"?/.exec(disposition);
     return { blob: response.data, filename: match?.[1] ?? `acadiq-report-${id}.pdf` };
   },
+  /** Student-facing copy of a generated paper (no verifier content). */
+  downloadGeneratedPaper: async (id: number, format: "pdf" | "md", annotations = false) => {
+    const response = await api.get<Blob>(`/reports/${id}/paper.${format}`, { responseType: "blob", params: annotations ? { annotations: "true" } : undefined });
+    const disposition = String(response.headers["content-disposition"] ?? "");
+    const match = /filename="?([^";]+)"?/.exec(disposition);
+    return { blob: response.data, filename: match?.[1] ?? `generated-paper-${id}.${format}` };
+  },
+  adoptGeneratedPaper: (id: number, payload: { year: number; semester: string; includeAnnotations?: boolean }) =>
+    api.post<{ data: QuestionPaper & { duplicateWarnings: UploadDuplicateWarning[]; sourceReportId: number } }>(`/reports/${id}/adopt-paper`, payload).then((r) => r.data.data),
 };

@@ -43,13 +43,14 @@ export const copilotService = {
       userId,
       session.courseId ?? input.courseId,
       input.examId ?? session.examId ?? undefined,
-      input.reportId
+      input.reportId,
+      input.message
     );
 
     await copilotRepository.addCopilotContext({
       sessionId: session.id,
       sourceType: context.sources.length > 0 ? "RETRIEVED_CONTEXT" : "NONE_AVAILABLE",
-      content: JSON.stringify({ intent, sources: context.sources, retrievedAt: new Date().toISOString() }),
+      content: JSON.stringify({ intent, sources: context.sources, retrieval: context.retrieval, retrievedAt: new Date().toISOString() }),
     });
 
     const systemPrompt = buildCopilotSystemPrompt(context, intent);
@@ -97,6 +98,7 @@ export const copilotService = {
       reasoning: aiResponse.reasoning,
       confidence: aiResponse.confidence,
       sources: context.sources,
+      retrieval: context.retrieval,
       createdAt: savedAssistantMessage.createdAt,
     };
   },

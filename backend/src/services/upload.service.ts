@@ -6,6 +6,8 @@ import { courseRepository } from "../repositories/course.repository";
 import { documentRepository } from "../repositories/document.repository";
 import { UploadedDocument } from "../validators/document.validator";
 import { logger } from "../utils/logger";
+import { indexSyllabus } from "./copilot/rag.service";
+import { questionSearchService, UploadDuplicateWarning } from "./questionSearch.service";
 
 async function assertCourseOwnership(courseId: number, facultyId: number) {
   const course = await courseRepository.findOwnedById(courseId, facultyId);
@@ -34,6 +36,12 @@ export const uploadService = {
       action: "Faculty uploaded syllabus",
       document: file.originalname,
     });
+    // Retrieval chunks for the Copilot; failures are logged, never surfaced to the upload.
+    try {
+      await indexSyllabus(doc.id, courseId, extractedText);
+    } catch (error) {
+      logger.warn("syllabus_index_failed", { syllabusId: doc.id, reason: error instanceof Error ? error.message : String(error) });
+    }
     return doc;
   },
 
@@ -60,13 +68,15 @@ export const uploadService = {
       document: file.originalname,
     });
     // Outside the transaction on purpose: inference must never hold row locks or fail the upload.
+    let duplicateWarnings: UploadDuplicateWarning[] = [];
     if (embeddingService.available) {
       try {
         await embeddingService.indexPaper(paper.id);
+        duplicateWarnings = await questionSearchService.duplicateWarnings(courseId, paper.id);
       } catch (error) {
         logger.warn("embedding_index_failed", { paperId: paper.id, reason: error instanceof Error ? error.message : String(error) });
       }
     }
-    return paper;
+    return { ...paper, duplicateWarnings };
   },
 };
