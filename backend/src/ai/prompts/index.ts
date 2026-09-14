@@ -7,3 +7,5 @@ export * from "./similarity.prompt";
 export * from "./academicMemory.prompt";
 export * from "./dualEvaluation.prompt";
 export * from "./paperGeneration.prompt";
+export * from "./facultyWorkflows.prompt";
+export * from "./timetable.prompt";

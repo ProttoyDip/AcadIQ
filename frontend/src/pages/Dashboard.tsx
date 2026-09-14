@@ -5,6 +5,7 @@ import { useCourses } from "../hooks/useCourses";
 import { useReports } from "../hooks/useReports";
 import { useAuth } from "../hooks/useAuth";
 import WelcomeHeader from "../components/dashboard/WelcomeHeader";
+import TodayBriefing from "../components/dashboard/TodayBriefing";
 import StatCard from "../components/dashboard/StatCard";
 import RiskCard from "../components/dashboard/RiskCard";
 import RecentAnalysisList, { RecentReportItem } from "../components/dashboard/RecentAnalysisList";
@@ -118,6 +119,8 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col gap-8">
       <WelcomeHeader name={user?.name} />
+
+      <TodayBriefing />
 
       {noReportsYet && (
         <section className="rounded-2xl border border-primary-200 bg-gradient-to-br from-primary-50/70 via-card to-card p-6 shadow-xs dark:border-primary-800 dark:from-primary-950/40">

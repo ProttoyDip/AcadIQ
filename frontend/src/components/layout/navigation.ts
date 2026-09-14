@@ -7,6 +7,8 @@ import {
   BrainCircuit,
   FileBarChart,
   Wand2,
+  Library,
+  CalendarDays,
   type LucideIcon,
 } from "lucide-react";
 
@@ -29,6 +31,7 @@ export const navGroups: NavGroup[] = [
     links: [
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { to: "/courses", label: "Courses", icon: GraduationCap },
+      { to: "/schedule", label: "Schedule", icon: CalendarDays },
       { to: "/upload", label: "Upload & Analyze", icon: UploadCloud },
       { to: "/reports", label: "Reports", icon: FileBarChart },
     ],
@@ -39,6 +42,7 @@ export const navGroups: NavGroup[] = [
       { to: "/dual-evaluate", label: "Dual LLM Evaluator", icon: BrainCircuit },
       { to: "/question-memory", label: "Academic Memory", icon: History },
       { to: "/paper-generator", label: "Paper Generator", icon: Wand2 },
+      { to: "/question-bank", label: "Question Bank", icon: Library },
     ],
   },
   {

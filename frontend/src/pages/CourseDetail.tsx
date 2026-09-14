@@ -1,7 +1,13 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, FileText, GraduationCap, ScrollText, TrendingUp, UploadCloud, Presentation } from "lucide-react";
+import { ArrowLeft, FileText, GraduationCap, ScrollText, TrendingUp, UploadCloud, Presentation, BarChart3, ClipboardList, Target, Wrench } from "lucide-react";
 import TeachingMaterialsPanel from "../components/upload/TeachingMaterialsPanel";
+import MarksAnalysisPanel from "../components/analysis/MarksAnalysisPanel";
+import RubricPanel from "../components/analysis/RubricPanel";
+import BlueprintPanel from "../components/analysis/BlueprintPanel";
+import CourseToolsPanel from "../components/analysis/CourseToolsPanel";
+import PaceCard from "../components/schedule/PaceCard";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { useCourse } from "../hooks/useCourses";
 import { useReports } from "../hooks/useReports";
 import PageHeader from "../components/layout/PageHeader";
@@ -206,6 +212,57 @@ export default function CourseDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {activePaper && (
+        <Card className="shadow-xs">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-bold tracking-tight">Paper workbench — {paperLabel(activePaper)}</CardTitle>
+            <p className="text-xs text-muted-foreground">Post-exam results, marking scheme and blueprint fit for the selected paper.</p>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="results">
+              <TabsList className="mb-4 flex-wrap h-auto">
+                <TabsTrigger value="results">
+                  <BarChart3 className="h-4 w-4" /> Results &amp; attainment
+                </TabsTrigger>
+                <TabsTrigger value="rubric">
+                  <ClipboardList className="h-4 w-4" /> Marking scheme
+                </TabsTrigger>
+                <TabsTrigger value="blueprint">
+                  <Target className="h-4 w-4" /> Blueprint fit
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="results">
+                <MarksAnalysisPanel key={activePaper.id} paperId={activePaper.id} courseId={course.id} />
+              </TabsContent>
+              <TabsContent value="rubric">
+                <RubricPanel courseId={course.id} paperId={activePaper.id} />
+              </TabsContent>
+              <TabsContent value="blueprint">
+                <BlueprintPanel courseId={course.id} paperId={activePaper.id} outcomes={(course.courseOutcomes ?? []).map((o) => o.code)} />
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="shadow-xs">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight">
+            <Wrench className="h-4 w-4 text-primary" /> Course tools
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">Plan the term, check what your slides cover, and export the course file.</p>
+        </CardHeader>
+        <CardContent>
+          <CourseToolsPanel courseId={course.id} courseCode={course.courseCode} hasSyllabus={Boolean(syllabus)} />
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-xs">
+        <CardContent className="pt-6">
+          <PaceCard courseId={course.id} />
+        </CardContent>
+      </Card>
 
       <Card className="shadow-xs">
         <CardHeader className="pb-3">

@@ -2,12 +2,18 @@
   "academic-memory": "v1@93604bf7c9894d0c843b7ea1d1e15479a96017ec4aceab0425ebaea7fe755a8b",
   "academic-memory-candidates": "v1@1644217f555fad2c030d4b2097ed7a0bf0f7be07c3bff8df892cf3dd798f6fb0",
   "bloom-label": "v1@aff931d0138f3e1db24a7e0d3d332ec6d83a62ce4abcc436d4b28b8894cc2937",
+  "class-notice": "v1@a821e7625a822a390cd8ff8502b71b1ccf363af728233ac56174fbdcfa11d3ad",
   "course-outcome-mapping": "v1@4ffbb4c06bd45fe8123b3eab833e234594cbd5d5f97c5b2c381adf1ee9a3db69",
   "dual-evaluation": "v2@8ed62848d7388fa081e582fd665c0d9e0a765d11a3e805a2c26b90982efbe010",
   "exam-quality": "v1@dbbf321673b99e07ff045435339e6d6df58a37deae2620ce9c142a4abb220f79",
+  "lecture-plan": "v1@9276356864ef5967b1af1fc3c2d8acbb2943843222ae94860acf14f8520144e8",
+  "pace-replan": "v1@0c9e3511a2a350970f87938a856190a78c35642ccab7cbd266bc347f65fc92e8",
   "paper-generation": "v3@c625ed4c1575a76d7fdffb213b828774b61797cb56ff57fffb8b8c8738afc7b7",
   "question-review": "v1@d9f535a9f6f3be0e196c7963c8013d4121a76f7e40be7fc636034792d3512f2e",
+  "question-rewrite": "v1@47ef19b0cb21e15c308b4dedb55b51e3fcbabb35276355b2ce7741d7feac5ba4",
   "question-similarity": "v1@337eca1f7e0a770a5e93e7cb6ab6846718b01f4937e786897a2b622c57137984",
   "question-similarity-candidates": "v1@2f37d87f965812d174fde3adf0641885eec3f571804ef0fe5f73bbb08b4bc037",
+  "routine-extract": "v1@915e52ed6adb41309b3e9b3a8f3bcdba234fddaa4c373719e0b8948cc4ccc7e1",
+  "rubric-generation": "v1@02b9a9362c67ef07f2c531505730ac3ddda8b6b101e72bf37c3d68f5b615928b",
   "syllabus-coverage": "v1@2fdc0e809add035e88969bf375fcd5c37ff7f4473d54301d1b2ef57f7acef99d"
 }

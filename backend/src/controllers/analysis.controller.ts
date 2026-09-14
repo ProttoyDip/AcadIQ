@@ -19,6 +19,8 @@ import { coMappingService } from "../services/coMapping.service";
 import { dualEvaluationService } from "../services/dualEvaluation.service";
 import { fullAnalysisService } from "../services/fullAnalysis.service";
 import { generatePaperSchema, paperGeneratorService } from "../services/paperGenerator.service";
+import { generateRubricSchema, rubricService } from "../services/rubric.service";
+import { questionRewriteService, rewriteQuestionSchema } from "../services/questionRewrite.service";
 import { extractPdfText } from "../ai/pdfTextExtractor";
 import { AppError } from "../middleware/error.middleware";
 
@@ -85,6 +87,24 @@ export const analysisController = {
     try {
       const input = generatePaperSchema.parse(req.body);
       return success(res, await paperGeneratorService.generate(req.user!.userId, input), 201);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async generateRubric(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const input = generateRubricSchema.parse(req.body);
+      return success(res, await rubricService.generate(req.user!.userId, input), 201);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async rewriteQuestion(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const input = rewriteQuestionSchema.parse(req.body);
+      return success(res, await questionRewriteService.rewrite(req.user!.userId, input));
     } catch (err) {
       next(err);
     }
