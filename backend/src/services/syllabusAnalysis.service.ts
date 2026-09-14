@@ -3,9 +3,11 @@ import { runSyllabusCoveragePipeline } from "../ai/pipeline/syllabusPipeline";
 import { AnalyzeSyllabusInput } from "../validators/analysis.validator";
 import { loadAnalysisContext, loadReliabilityEvidence, loadSyllabusText } from "./analysisContext.service";
 import { withDecisionContract } from "../ai/confidence";
+import { tracedAnalysis } from "./traced";
 
 export const syllabusAnalysisService = {
-  async analyze(facultyId: number, input: AnalyzeSyllabusInput) {
+  analyze(facultyId: number, input: AnalyzeSyllabusInput) {
+    return tracedAnalysis(async () => {
     const { paper, questions } = await loadAnalysisContext(facultyId, input.courseId, input.questionPaperId);
     const syllabusText = await loadSyllabusText(input.courseId);
     const questionsText = questions.map((q) => `- ${q.questionText}`).join("\n");
@@ -31,5 +33,6 @@ export const syllabusAnalysisService = {
     );
 
     return { reportId: report.id, ...completeResult };
+    });
   },
 };

@@ -34,6 +34,9 @@ import QuestionReviewTable from "../components/reports/QuestionReviewTable";
 import RecommendationCard from "../components/reports/RecommendationCard";
 import TopicCoverageTable from "../components/reports/TopicCoverageTable";
 import SimilarityMatchTable from "../components/reports/SimilarityMatchTable";
+import ReliabilityCard from "../components/reports/ReliabilityCard";
+import ProvenancePanel from "../components/reports/ProvenancePanel";
+import GeneratedPaperReport from "../components/reports/GeneratedPaperReport";
 import OutcomeMappingTable from "../components/reports/OutcomeMappingTable";
 import MarksDistributionChart from "../components/analytics/MarksDistributionChart";
 import DifficultyDistributionChart from "../components/analytics/DifficultyDistributionChart";
@@ -45,7 +48,9 @@ import { deriveScoreFactors, difficultyBucketBreakdown } from "../lib/insights";
 import {
   ExamQualityResult,
   QuestionSimilarityResult,
+  RetrievalProvenance,
   SyllabusCoverageResult,
+  GeneratedPaperResult,
   CoMappingResult,
   QuestionReviewResult,
   Course,
@@ -74,16 +79,7 @@ function buildQuestionLookup(course?: Course): Map<number, ResolvedQuestion> {
 }
 
 function DecisionContractCard({ explanation }: { explanation: AIExplanation }) {
-  return (
-    <ExplainableAIInsightCard
-      icon={Sparkles}
-      label="AI decision"
-      result={explanation.decision}
-      confidence={explanation.confidence}
-      reasoning={explanation.reason}
-      tone={explanation.confidence >= 75 ? "success" : explanation.confidence >= 50 ? "warning" : "error"}
-    />
-  );
+  return <ReliabilityCard explanation={explanation} />;
 }
 
 export default function AnalysisReport() {
@@ -224,8 +220,15 @@ export default function AnalysisReport() {
           <CoMappingReport result={report.resultJson as unknown as CoMappingResult} />
         )}
         {report.reportType === "QUESTION_REVIEW" && (
-          <QuestionReviewReport result={report.resultJson as unknown as QuestionReviewResult} />
+          <QuestionReviewReport result={report.resultJson as unknown as QuestionReviewResult} reportId={report.id} />
         )}
+        {report.reportType === "GENERATED_PAPER" && (
+          <GeneratedPaperReport result={report.resultJson as unknown as GeneratedPaperResult} />
+        )}
+        {(report.reportType === "ACADEMIC_MEMORY") && (
+          <DecisionContractCard explanation={(report.resultJson as unknown as { explanation: AIExplanation }).explanation} />
+        )}
+        <ProvenancePanel reportId={report.id} />
       </div>
 
       {report.courseId && (
@@ -618,9 +621,41 @@ function SimilarityReport({
         title="Question similarity matches"
         explanation="Questions flagged as duplicate, conceptually similar, or repeated patterns against a previous paper."
       >
+        {result.retrieval && <RetrievalProvenanceStrip retrieval={result.retrieval} />}
         <SimilarityMatchTable matches={result.matches} />
       </ReportSection>
     </>
+  );
+}
+
+function RetrievalProvenanceStrip({ retrieval }: { retrieval: RetrievalProvenance }) {
+  if (retrieval.method === "LLM_ONLY") {
+    return (
+      <p className="mb-3 text-small text-muted-foreground">
+        Retrieval: <span className="font-medium text-foreground">LLM only</span> — every question pair was sent to the model in one prompt
+        {retrieval.fallbackReason ? ` (embedding index unavailable: ${retrieval.fallbackReason})` : ""}.
+      </p>
+    );
+  }
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 text-small text-muted-foreground">
+      <span>
+        Retrieval: <span className="font-medium text-foreground">embedding shortlist → AI explanation</span>
+      </span>
+      <Badge variant="outline" className="font-normal">{retrieval.embeddingModel}</Badge>
+      <Badge variant="outline" className="font-normal tabular-nums">
+        floor {retrieval.similarityFloor?.toFixed(2)}
+        {retrieval.backgroundP95 !== null && retrieval.similarityFloor !== null && retrieval.backgroundP95 > (retrieval.configuredFloor ?? 0)
+          ? " (adaptive)"
+          : ""}
+      </Badge>
+      <Badge variant="outline" className="font-normal tabular-nums">top-{retrieval.topK} per question</Badge>
+      <Badge variant="outline" className="font-normal tabular-nums">
+        {retrieval.candidatePairs} candidate{retrieval.candidatePairs === 1 ? "" : "s"} · {retrieval.rejectedPairs} rejected by AI
+      </Badge>
+      <Badge variant="outline" className="font-normal tabular-nums">{retrieval.llmCalls} LLM call{retrieval.llmCalls === 1 ? "" : "s"}</Badge>
+      {retrieval.truncated && <Badge variant="warning" className="font-normal">shortlist capped</Badge>}
+    </div>
   );
 }
 
@@ -664,7 +699,7 @@ function CoMappingReport({ result }: { result: CoMappingResult }) {
   );
 }
 
-function QuestionReviewReport({ result }: { result: QuestionReviewResult }) {
+function QuestionReviewReport({ result, reportId }: { result: QuestionReviewResult; reportId: number }) {
   return (
     <>
       <ScoreHero score={result.qualityScore} title="Question Quality Score" subtitle="AI-generated assessment" />
@@ -672,9 +707,9 @@ function QuestionReviewReport({ result }: { result: QuestionReviewResult }) {
       <ReportSection
         icon={Brain}
         title="Per-question clarity review"
-        explanation="Each question's clarity, Bloom level, and any AI-suggested rewrite."
+        explanation="Each question's clarity, Bloom level, and any AI-suggested rewrite. Your thumbs and Bloom corrections are stored as human labels."
       >
-        <QuestionReviewTable questions={result.questions} />
+        <QuestionReviewTable questions={result.questions} reportId={reportId} />
       </ReportSection>
       <ReportSection icon={ListChecks} title="AI recommendations" explanation="Evidence-based suggestions faculty can act on.">
         <div className="flex flex-col gap-3">

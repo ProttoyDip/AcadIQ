@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextFunction, Request, Response } from "express";
 import { logger } from "../utils/logger";
+import { runInRequestScope } from "../ai/trace";
 
 export function requestContext(req: Request, res: Response, next: NextFunction) {
   const requestId = typeof req.headers["x-request-id"] === "string" ? req.headers["x-request-id"] : randomUUID();
@@ -16,5 +17,6 @@ export function requestContext(req: Request, res: Response, next: NextFunction) 
       durationMs: Date.now() - startedAt,
     });
   });
-  next();
+  // `?noCache=true` bypasses LLM cache reads for this request (still writes).
+  runInRequestScope(requestId, req.query.noCache === "true", () => next());
 }

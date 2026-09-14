@@ -17,6 +17,7 @@ router.post("/similarity", analysisController.analyzeSimilarity);
 router.post("/question-review", analysisController.reviewQuestions);
 router.post("/co-mapping", analysisController.mapCourseOutcomes);
 router.post("/full", analysisController.analyzeFull);
+router.post("/generate-paper", analysisController.generatePaper);
 router.post(
   "/dual-evaluate",
   (req, res, next) => {

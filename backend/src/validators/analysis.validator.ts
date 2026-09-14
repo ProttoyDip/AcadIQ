@@ -5,10 +5,14 @@ const courseOutcomeInput = z.object({
   description: z.string().trim().min(3).max(1000),
 });
 
+/** `fast` = one call (default). `verified` = k sampled calls with model-agreement reporting. */
+const reliability = z.enum(["fast", "verified"]).optional();
+
 export const analyzeExamSchema = z.object({
   courseId: z.coerce.number().int().positive(),
   questionPaperId: z.coerce.number().int().positive(),
   courseOutcomes: z.array(courseOutcomeInput).min(1).max(30).optional(),
+  reliability,
 });
 
 export const analyzeSyllabusSchema = z.object({
@@ -20,6 +24,7 @@ export const analyzeSimilaritySchema = z.object({
   courseId: z.coerce.number().int().positive(),
   currentPaperId: z.coerce.number().int().positive(),
   previousPaperId: z.coerce.number().int().positive(),
+  reliability,
 });
 
 export const questionReviewSchema = analyzeExamSchema.extend({
@@ -35,6 +40,7 @@ export const dualEvaluationSchema = z.object({
   maxMarks: z.coerce.number().positive().max(1_000).default(10),
   modelAnswer: z.string().trim().min(3).max(60_000),
   studentAnswer: z.string().trim().min(1).max(60_000),
+  studentIdentifiers: z.array(z.string().trim().min(1).max(120)).max(10).optional(),
 });
 
 const questionTextInput = z.object({
@@ -51,6 +57,7 @@ export const memoryCheckSchema = z.object({
     year: z.coerce.number().int().min(1900).max(2200),
   })).min(1).max(500).optional(),
   similarityThreshold: z.coerce.number().min(0).max(100).default(40),
+  reliability,
 }).superRefine((value, context) => {
   if (!value.questionPaperId && !value.newQuestions) {
     context.addIssue({

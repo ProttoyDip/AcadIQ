@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon --exec ts-node src/server.ts",
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test tests/ai.test.js tests/security_and_copilot.test.js tests/copilot_db.test.js",
+    "test": "npm run build && node --test tests/ai.test.js tests/embedding.test.js tests/reliability.test.js tests/security_and_copilot.test.js tests/copilot_db.test.js",
     "test:api": "npm run build && node --test tests/api.integration.test.js",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
@@ -16,12 +16,18 @@
     "prisma:seed": "ts-node prisma/seed.ts",
     "seed": "ts-node prisma/seed.ts",
     "seed:datasets": "ts-node src/database/seedDatasets.ts",
+    "embeddings:download": "node dist/scripts/downloadEmbeddingModel.js",
+    "embeddings:backfill": "node dist/scripts/backfillEmbeddings.js",
+    "embeddings:calibrate": "node dist/scripts/calibrateSimilarityFloor.js",
+    "traces:prune": "node dist/scripts/pruneTraces.js",
+    "prompts:snapshot": "node dist/scripts/snapshotPrompts.js",
     "lint": "eslint src --ext .ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@prisma/client": "^5.19.1",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",

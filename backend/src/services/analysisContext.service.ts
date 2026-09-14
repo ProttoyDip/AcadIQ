@@ -25,7 +25,11 @@ export async function loadSyllabusText(courseId: number) {
   if (!syllabus) {
     throw new AppError("Upload a syllabus for this course before running this analysis", 400);
   }
-  return extractDocumentText(syllabus.filePath, syllabus.mimeType);
+  if (syllabus.extractedText?.trim()) return syllabus.extractedText;
+  // Older rows were stored before text was persisted: parse once and backfill.
+  const text = await extractDocumentText(syllabus.filePath, syllabus.mimeType);
+  documentRepository.saveSyllabusText(syllabus.id, text).catch(() => undefined);
+  return text;
 }
 
 interface ReliabilityOptions {

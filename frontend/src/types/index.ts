@@ -44,11 +44,33 @@ export interface Question {
 export type BloomLevel = "REMEMBER" | "UNDERSTAND" | "APPLY" | "ANALYZE" | "EVALUATE" | "CREATE";
 export type Priority = "LOW" | "MEDIUM" | "HIGH";
 
+export interface EvidenceBreakdown {
+  documentCompleteness: number;
+  questionSample: number;
+  syllabus: number;
+  courseOutcomes: number;
+  history: number;
+}
+
+/**
+ * Reliability v2: `confidence` = min(evidenceSufficiency, modelAgreement ?? evidenceSufficiency).
+ * `modelAgreement` is null for single runs and measures answer stability, never accuracy.
+ * Reports without `reliabilityVersion` are v1 (confidence = input completeness only).
+ */
 export interface AIExplanation {
   decision: string;
   reason: string;
   confidence: number;
+  evidenceSufficiency?: number;
+  evidenceBreakdown?: EvidenceBreakdown;
+  modelAgreement?: number | null;
+  sampleCount?: number;
+  retrievalSupport?: number | null;
+  reliabilityNote?: string;
+  reliabilityVersion?: 2;
 }
+
+export type ReliabilityMode = "fast" | "verified";
 
 interface ExplainableResult extends AIExplanation {
   explanation: AIExplanation;
@@ -100,6 +122,29 @@ export interface SimilarityMatch {
   matchType: "DUPLICATE" | "SIMILAR_CONCEPT" | "REPEATED_PATTERN";
   reason: string;
   confidence: number;
+  /** Cosine similarity (0-1) from the local embedding model; reproducible, model-free. */
+  vectorSimilarity?: number;
+  source?: "EMBEDDING+LLM" | "LLM_ONLY";
+  /** "2/3" style vote when the report was run with reliability=verified. */
+  votes?: string;
+  contested?: boolean;
+  modelAgreement?: number | null;
+  evidenceSufficiency?: number;
+}
+
+export interface RetrievalProvenance {
+  method: "EMBEDDING+LLM" | "LLM_ONLY";
+  embeddingModel: string | null;
+  similarityFloor: number | null;
+  configuredFloor: number | null;
+  backgroundP95: number | null;
+  nearDuplicateThreshold: number | null;
+  topK: number | null;
+  candidatePairs: number;
+  rejectedPairs: number;
+  llmCalls: number;
+  truncated: boolean;
+  fallbackReason?: string;
 }
 
 export interface QuestionSimilarityResult extends ExplainableResult {
@@ -107,6 +152,7 @@ export interface QuestionSimilarityResult extends ExplainableResult {
   matches: SimilarityMatch[];
   overallDuplicationPercentage: number;
   recommendation: string;
+  retrieval?: RetrievalProvenance;
 }
 
 export type CoMappingStrength = "WEAK" | "MODERATE" | "STRONG";
@@ -141,6 +187,9 @@ export interface QuestionReviewItem {
   questionId: number;
   clarityScore: number;
   bloomLevel: BloomLevel;
+  topic?: string;
+  bloomVotes?: string;
+  bloomContested?: boolean;
   decision: string;
   reason: string;
   confidence: number;
@@ -161,7 +210,103 @@ export type ReportType =
   | "SYLLABUS_COVERAGE"
   | "QUESTION_SIMILARITY"
   | "QUESTION_REVIEW"
-  | "CO_MAPPING";
+  | "CO_MAPPING"
+  | "ACADEMIC_MEMORY"
+  | "GENERATED_PAPER";
+
+export interface QuestionFeedback {
+  id: number;
+  questionId: number;
+  reportId: number | null;
+  verdict: "UP" | "DOWN";
+  aiBloomLevel: string | null;
+  correctedBloomLevel: string | null;
+  aiTopic: string | null;
+  correctedTopic: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface FeedbackStats {
+  total: number;
+  thumbsUp: number;
+  thumbsDown: number;
+  bloomCorrections: number;
+  bloomAgreementPercent: number | null;
+  cohensKappa: number | null;
+  kappaNote: string;
+}
+
+export interface ProvenanceRun {
+  id: number;
+  pipeline: string;
+  prompt: { id: string; version: string; hash: string; current: boolean };
+  model: string;
+  temperature: number;
+  inputHash: string;
+  sampleCount: number;
+  cacheHit: boolean;
+  usage: { promptTokens: number | null; completionTokens: number | null; totalTokens: number | null };
+  latencyMs: number;
+  status: "OK" | "VALIDATION_FAILED" | "PROVIDER_ERROR";
+  agreement: { sampleCount: number; agreement: number; spread?: number; has_high_discrepancy: boolean; votes?: Record<string, string>; contested?: string[] } | null;
+  requestId: string | null;
+  createdAt: string;
+  samples: Array<{ id: number; sampleIndex: number; validated: boolean; createdAt: string }>;
+}
+
+export interface ReportProvenance {
+  reportId: number;
+  reportType: ReportType;
+  createdAt: string;
+  reliabilityVersion: number;
+  runs: ProvenanceRun[];
+  totals: { llmCalls: number; cacheHits: number; totalTokens: number; latencyMs: number };
+}
+
+export interface ReproduceResult {
+  originalReportId: number;
+  reproducedReportId: number;
+  reportType: ReportType;
+  reliability: ReliabilityMode;
+  inputsUnchanged: boolean;
+  promptsUnchanged: boolean;
+  identical: boolean;
+  headline: { before: Record<string, unknown>; after: Record<string, unknown>; changes: Record<string, { before: unknown; after: unknown }> };
+  comparison: Array<{ pipeline: string; inputHashMatch: boolean; promptHashMatch: boolean; modelMatch: boolean; temperatureMatch: boolean }>;
+  note: string;
+}
+
+export interface GeneratedPaperQuestion {
+  sequenceNumber: number;
+  text: string;
+  marks: number;
+  intendedBloom: BloomLevel;
+  intendedOutcome: string | null;
+  topic: string;
+}
+
+export interface GeneratedPaperResult extends ExplainableResult {
+  reportId: number;
+  courseId: number;
+  constraints: { questionCount: number; totalMarks: number; targetBloom: Record<string, number>; outcomeWeights?: Record<string, number>; passThreshold: number; maxIterations: number };
+  paper: { title: string; questions: GeneratedPaperQuestion[]; designNotes: string };
+  verification: {
+    objective: number;
+    passed: boolean;
+    scores: Record<string, number>;
+    weights: Record<string, number>;
+    violations: string[];
+    observedBloom: Record<string, number>;
+    observedOutcomes: Record<string, number>;
+    marksTotal: number;
+    nearDuplicates: Array<{ sequenceNumber: number; cosine: number }>;
+    llmCalls: number;
+  };
+  iterations: Array<{ iteration: number; objective: number; passed: boolean; violations: string[]; feedback: string | null; questionCount: number }>;
+  bestIteration: number;
+  totalLlmCalls: number;
+}
 
 export type FullAnalysisKey = "examQuality" | "syllabusCoverage" | "questionReview" | "coMapping" | "similarity";
 

@@ -1,22 +1,38 @@
 import { AppError } from "../../middleware/error.middleware";
 import { CoMappingResult } from "../../models/types";
-import { buildCoMappingPrompt, CO_MAPPING_SYSTEM_PROMPT } from "../prompts/coMapping.prompt";
+import { CO_MAPPING_PROMPT } from "../prompts/coMapping.prompt";
 import { coMappingResponseSchema } from "../schemas/analysisResponse.schema";
 import { applyCalculatedConfidence, ConfidenceEvidence, defaultConfidenceEvidence } from "../confidence";
-import { callValidatedLlmJson } from "../validatedLlm";
+import { aggregateLabels } from "../aggregate";
+import { runLlmAnalysis } from "../runner";
+import { PipelineOptions } from "./options";
 
 export async function runCoMappingPipeline(
   syllabusText: string,
   questions: Array<{ id: number; text: string; marks: number }>,
   outcomes?: Array<{ code: string; description: string }>,
-  evidence?: ConfidenceEvidence
+  evidence?: ConfidenceEvidence,
+  options: PipelineOptions = {}
 ) {
-  const parsed = await callValidatedLlmJson(
-    CO_MAPPING_SYSTEM_PROMPT,
-    buildCoMappingPrompt(syllabusText, questions, outcomes),
-    coMappingResponseSchema,
-    "course-outcome-mapping"
-  );
+  const run = await runLlmAnalysis(CO_MAPPING_PROMPT, [syllabusText, questions, outcomes], coMappingResponseSchema, {
+    reliability: options.reliability,
+    // Vote per question on the mapped outcome; the sample agreeing most with the modal labels supplies prose.
+    aggregate: (samples) => {
+      const labelSets = samples.map((s) => Object.fromEntries(s.questionCOMap.map((m) => [String(m.questionId), m.courseOutcome])));
+      const { consensus: modal, agreement } = aggregateLabels(labelSets);
+      let best = 0;
+      let bestMatches = -1;
+      samples.forEach((sample, index) => {
+        const matches = sample.questionCOMap.filter((m) => modal[String(m.questionId)] === m.courseOutcome).length;
+        if (matches > bestMatches) {
+          bestMatches = matches;
+          best = index;
+        }
+      });
+      return { consensus: samples[best], agreement };
+    },
+  });
+  const parsed = run.consensus;
   const allowedIds = new Set(questions.map((question) => question.id));
   const referencedIds = [...parsed.questionCOMap.map((item) => item.questionId), ...parsed.unmappedQuestionIds];
   if (referencedIds.some((id) => !allowedIds.has(id))) throw new AppError("AI response referenced an unknown question", 502);
@@ -49,10 +65,17 @@ export async function runCoMappingPipeline(
     throw new AppError("AI response contains inconsistent course outcome references", 502);
   }
   const reliability = evidence ?? defaultConfidenceEvidence(questions.map((question) => question.text));
-  const explanation = applyCalculatedConfidence(parsed.explanation, reliability);
+  const explanation = applyCalculatedConfidence(parsed.explanation, reliability, { agreement: run.agreement });
+  const votes = run.agreement?.votes ?? {};
   return {
     ...parsed,
-    questionCOMap: parsed.questionCOMap.map((mapping) => ({ ...mapping, confidence: explanation.confidence })),
+    questionCOMap: parsed.questionCOMap.map((mapping) => ({
+      ...mapping,
+      confidence: explanation.confidence,
+      votes: votes[String(mapping.questionId)],
+      modelAgreement: explanation.modelAgreement,
+      evidenceSufficiency: explanation.evidenceSufficiency,
+    })),
     explanation,
   } as CoMappingResult;
 }

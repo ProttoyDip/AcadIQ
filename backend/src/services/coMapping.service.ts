@@ -4,9 +4,11 @@ import { CoMappingInput } from "../validators/analysis.validator";
 import { loadAnalysisContext, loadReliabilityEvidence, loadSyllabusText } from "./analysisContext.service";
 import { courseRepository } from "../repositories/course.repository";
 import { withDecisionContract } from "../ai/confidence";
+import { tracedAnalysis } from "./traced";
 
 export const coMappingService = {
-  async analyze(facultyId: number, input: CoMappingInput) {
+  analyze(facultyId: number, input: CoMappingInput) {
+    return tracedAnalysis(async () => {
     const { paper, questions } = await loadAnalysisContext(facultyId, input.courseId, input.questionPaperId);
     const syllabusText = await loadSyllabusText(input.courseId);
     const storedOutcomes = await courseRepository.findOutcomes(input.courseId);
@@ -21,11 +23,12 @@ export const coMappingService = {
       syllabusText,
       questions.map((question) => ({ id: question.id, text: question.questionText, marks: Number(question.marks) })),
       requestedOutcomes,
-      evidence
+      evidence,
+      { reliability: input.reliability }
     );
     const completeResult = withDecisionContract({
       ...result,
-      mappings: result.questionCOMap.map(({ questionId, courseOutcome, strength, decision, reason, confidence }) => ({
+      mappings: result.questionCOMap.map(({ questionId, courseOutcome, strength, decision, reason, confidence, votes, modelAgreement, evidenceSufficiency }) => ({
         questionId,
         courseOutcome,
         strength,
@@ -33,6 +36,9 @@ export const coMappingService = {
         rationale: reason,
         reason,
         confidence,
+        votes,
+        modelAgreement,
+        evidenceSufficiency,
       })),
     });
     const report = await reportRepository.createCoAnalysis(
@@ -49,5 +55,6 @@ export const coMappingService = {
       result.questionCOMap
     );
     return { reportId: report.id, ...completeResult };
+    });
   },
 };

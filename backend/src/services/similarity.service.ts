@@ -7,9 +7,11 @@ import { AnalyzeSimilarityInput } from "../validators/analysis.validator";
 import { courseRepository } from "../repositories/course.repository";
 import { loadReliabilityEvidence } from "./analysisContext.service";
 import { withDecisionContract } from "../ai/confidence";
+import { tracedAnalysis } from "./traced";
 
 export const similarityService = {
-  async analyze(facultyId: number, input: AnalyzeSimilarityInput) {
+  analyze(facultyId: number, input: AnalyzeSimilarityInput) {
+    return tracedAnalysis(async () => {
     const course = await courseRepository.findOwnedById(input.courseId, facultyId);
     if (!course) throw new AppError("Course not found", 404);
     const currentPaper = await documentRepository.findQuestionPaperById(input.currentPaperId);
@@ -36,9 +38,18 @@ export const similarityService = {
     });
 
     const result = await runSimilarityPipeline(
-      currentQuestions.map((q) => ({ id: q.id, text: q.questionText })),
-      previousQuestions.map((q) => ({ id: q.id, text: q.questionText })),
-      evidence
+      currentQuestions.map((q) => ({
+        id: q.id,
+        text: q.questionText,
+        embeddingRef: { ownerType: "QUESTION", ownerId: q.id, courseId: input.courseId },
+      })),
+      previousQuestions.map((q) => ({
+        id: q.id,
+        text: q.questionText,
+        embeddingRef: { ownerType: "QUESTION", ownerId: q.id, courseId: input.courseId },
+      })),
+      evidence,
+      { reliability: input.reliability }
     );
     const completeResult = withDecisionContract(result);
 
@@ -55,5 +66,6 @@ export const similarityService = {
     );
 
     return { reportId: report.id, ...completeResult };
+    });
   },
 };

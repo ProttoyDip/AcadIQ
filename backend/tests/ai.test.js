@@ -115,7 +115,7 @@ test("confidence is deterministic and uses all five evidence inputs", () => {
   assert.match(first.reason, /3 previous exams/);
 });
 
-test("server replaces model confidence and explains the evidence", () => {
+test("server replaces model confidence with evidence sufficiency and never invents agreement", () => {
   const result = applyCalculatedConfidence(
     { decision: "REVIEW", reason: "Two questions are ambiguous.", confidence: 99 },
     {
@@ -129,8 +129,29 @@ test("server replaces model confidence and explains the evidence", () => {
   );
 
   assert.equal(result.confidence, 18);
+  assert.equal(result.evidenceSufficiency, 18);
   assert.notEqual(result.confidence, 99);
-  assert.match(result.reason, /Confidence 18\/100 is based on/);
+  // k = 1 → agreement is null, never a defaulted 100.
+  assert.equal(result.modelAgreement, null);
+  assert.equal(result.reliabilityVersion, 2);
+  // The model's prose is preserved verbatim; the arithmetic lives in reliabilityNote.
+  assert.equal(result.reason, "Two questions are ambiguous.");
+  assert.match(result.reliabilityNote, /Evidence sufficiency 18\/100 is based on/);
+  assert.match(result.reliabilityNote, /single run/);
+  assert.deepEqual(Object.keys(result.evidenceBreakdown).sort(), ["courseOutcomes", "documentCompleteness", "history", "questionSample", "syllabus"]);
+});
+
+test("composite confidence is min(evidence, agreement) when samples exist", () => {
+  const evidence = { documentCompleteness: 100, questionsAnalyzed: 30, syllabusAvailable: true, courseOutcomesAvailable: true, historicalQuestionCount: 30, historicalExamCount: 3 };
+  const result = applyCalculatedConfidence(
+    { decision: "OK", reason: "Fine.", confidence: 50 },
+    evidence,
+    { agreement: { sampleCount: 3, agreement: 67, has_high_discrepancy: false } }
+  );
+  assert.equal(result.evidenceSufficiency, 100);
+  assert.equal(result.modelAgreement, 67);
+  assert.equal(result.confidence, 67);
+  assert.equal(result.sampleCount, 3);
 });
 
 test("question review requires decision reasoning and confidence per question", () => {

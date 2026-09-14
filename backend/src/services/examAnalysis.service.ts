@@ -5,9 +5,11 @@ import { loadAnalysisContext, loadReliabilityEvidence, loadSyllabusText } from "
 import { courseRepository } from "../repositories/course.repository";
 import { withDecisionContract } from "../ai/confidence";
 import { auditService } from "./audit.service";
+import { tracedAnalysis } from "./traced";
 
 export const examAnalysisService = {
-  async analyze(facultyId: number, input: AnalyzeExamInput) {
+  analyze(facultyId: number, input: AnalyzeExamInput) {
+    return tracedAnalysis(async () => {
     const { paper, questions } = await loadAnalysisContext(facultyId, input.courseId, input.questionPaperId);
     const syllabusText = await loadSyllabusText(input.courseId);
     const storedOutcomes = await courseRepository.findOutcomes(input.courseId);
@@ -20,7 +22,7 @@ export const examAnalysisService = {
       courseOutcomeCount: courseOutcomes.length,
     });
 
-    const result = await runExamAnalysisPipeline(syllabusText, questionsText, courseOutcomes, evidence);
+    const result = await runExamAnalysisPipeline(syllabusText, questionsText, courseOutcomes, evidence, { reliability: input.reliability });
     const completeResult = withDecisionContract({
       ...result,
       // Existing frontend aliases remain available while the new explainable contract is adopted.
@@ -44,5 +46,6 @@ export const examAnalysisService = {
     });
 
     return { reportId: report.id, ...completeResult };
+    });
   },
 };

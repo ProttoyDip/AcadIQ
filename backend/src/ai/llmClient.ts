@@ -188,7 +188,67 @@ export async function callLlmChatJson<T>(messages: ChatMessage[]): Promise<T> {
   });
 }
 
-export async function callLlmJson<T>(systemPrompt: string, userPrompt: string, options: { model?: string } = {}): Promise<T> {
+export interface LlmCallOptions {
+  model?: string;
+  /** Defaults to 0.2 (near-deterministic). Self-consistency sampling raises it. */
+  temperature?: number;
+}
+
+export interface LlmCallMeta {
+  model: string;
+  temperature: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  latencyMs: number;
+  attempts: number;
+  /** Groq/OpenAI `x-ratelimit-remaining-tokens`, when the provider sends it. */
+  rateLimitRemainingTokens: number | null;
+  rateLimitRemainingRequests: number | null;
+}
+
+export interface LlmJsonResult<T> {
+  data: T;
+  /** Exact provider text, kept for provenance and cache; never re-serialised. */
+  raw: string;
+  meta: LlmCallMeta;
+}
+
+interface ChatCompletionBody {
+  choices?: { message?: { content?: string } }[];
+  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+}
+
+function headerNumber(response: Response, name: string): number | null {
+  const value = Number(response.headers.get(name));
+  return Number.isFinite(value) && response.headers.has(name) ? value : null;
+}
+
+function parseJsonObject<T>(content: string): T | undefined {
+  const normalized = content.trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
+  try {
+    return JSON.parse(normalized) as T;
+  } catch {
+    const objectStart = normalized.indexOf("{");
+    const objectEnd = normalized.lastIndexOf("}");
+    if (objectStart >= 0 && objectEnd > objectStart) {
+      try {
+        return JSON.parse(normalized.slice(objectStart, objectEnd + 1)) as T;
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  }
+}
+
+export async function callLlmJsonWithMeta<T>(
+  systemPrompt: string,
+  userPrompt: string,
+  options: LlmCallOptions = {}
+): Promise<LlmJsonResult<T>> {
   if (!env.openAiApiKey) {
     throw new AppError("AI provider is not configured (GROQ_API_KEY or OPENAI_API_KEY missing)", 503, {
       decision: "ANALYSIS_UNAVAILABLE",
@@ -206,6 +266,8 @@ export async function callLlmJson<T>(systemPrompt: string, userPrompt: string, o
     { role: "user", content: userPrompt },
   ];
   const model = options.model ?? env.openAiModel;
+  const temperature = options.temperature ?? 0.2;
+  const started = Date.now();
 
   let lastFailure = "AI analysis request failed";
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -220,7 +282,7 @@ export async function callLlmJson<T>(systemPrompt: string, userPrompt: string, o
         body: JSON.stringify({
           model,
           messages,
-          temperature: 0.2,
+          temperature,
           max_tokens: 8192,
           response_format: { type: "json_object" },
         }),
@@ -240,32 +302,39 @@ export async function callLlmJson<T>(systemPrompt: string, userPrompt: string, o
         response.status === 429
           ? "AI provider rate limit reached (HTTP 429) — please retry in a minute"
           : `AI provider returned HTTP ${response.status}`;
-      logger.warn("llm_request_attempt_failed", { attempt: attempt + 1, statusCode: response.status, model });
+      logger.warn("llm_request_attempt_failed", {
+        attempt: attempt + 1,
+        statusCode: response.status,
+        model,
+        remainingTokens: headerNumber(response, "x-ratelimit-remaining-tokens"),
+      });
       if (response.status < 500 && response.status !== 429) break;
     } else {
       try {
-        const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+        const body = (await response.json()) as ChatCompletionBody;
         const content = body?.choices?.[0]?.message?.content;
         if (!content) {
           lastFailure = "AI provider returned an empty response";
         } else {
-          const normalized = content.trim()
-            .replace(/^```(?:json)?\s*/i, "")
-            .replace(/\s*```$/, "");
-          try {
-            return JSON.parse(normalized) as T;
-          } catch {
-            const objectStart = normalized.indexOf("{");
-            const objectEnd = normalized.lastIndexOf("}");
-            if (objectStart >= 0 && objectEnd > objectStart) {
-              try {
-                return JSON.parse(normalized.slice(objectStart, objectEnd + 1)) as T;
-              } catch {
-                // Fall through to the retry below.
-              }
-            }
-            lastFailure = "AI provider returned malformed JSON";
+          const data = parseJsonObject<T>(content);
+          if (data !== undefined) {
+            return {
+              data,
+              raw: content,
+              meta: {
+                model,
+                temperature,
+                promptTokens: body.usage?.prompt_tokens ?? null,
+                completionTokens: body.usage?.completion_tokens ?? null,
+                totalTokens: body.usage?.total_tokens ?? null,
+                latencyMs: Date.now() - started,
+                attempts: attempt + 1,
+                rateLimitRemainingTokens: headerNumber(response, "x-ratelimit-remaining-tokens"),
+                rateLimitRemainingRequests: headerNumber(response, "x-ratelimit-remaining-requests"),
+              },
+            };
           }
+          lastFailure = "AI provider returned malformed JSON";
         }
       } catch {
         lastFailure = "AI provider returned an unreadable response";
@@ -281,4 +350,8 @@ export async function callLlmJson<T>(systemPrompt: string, userPrompt: string, o
     reason: `${lastFailure} after 3 recovery attempts; no AI decision was stored.`,
     confidence: 0,
   });
+}
+
+export async function callLlmJson<T>(systemPrompt: string, userPrompt: string, options: LlmCallOptions = {}): Promise<T> {
+  return (await callLlmJsonWithMeta<T>(systemPrompt, userPrompt, options)).data;
 }

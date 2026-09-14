@@ -18,6 +18,7 @@ import { questionReviewService } from "../services/questionReview.service";
 import { coMappingService } from "../services/coMapping.service";
 import { dualEvaluationService } from "../services/dualEvaluation.service";
 import { fullAnalysisService } from "../services/fullAnalysis.service";
+import { generatePaperSchema, paperGeneratorService } from "../services/paperGenerator.service";
 import { extractPdfText } from "../ai/pdfTextExtractor";
 import { AppError } from "../middleware/error.middleware";
 
@@ -75,6 +76,15 @@ export const analysisController = {
     try {
       const input = fullAnalysisSchema.parse(req.body);
       return success(res, await fullAnalysisService.analyze(req.user!.userId, input), 201);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async generatePaper(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const input = generatePaperSchema.parse(req.body);
+      return success(res, await paperGeneratorService.generate(req.user!.userId, input), 201);
     } catch (err) {
       next(err);
     }

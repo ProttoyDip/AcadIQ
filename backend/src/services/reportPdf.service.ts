@@ -120,11 +120,27 @@ export const reportPdfService = {
 
     // Decision contract
     const explanation = report.explanation ?? { decision: result.decision, reason: result.reason, confidence: result.confidence };
+    const v2 = (result.explanation ?? {}) as Record<string, unknown>;
     heading(doc, "AI decision");
     keyValue(doc, "Decision", str(explanation?.decision));
+    if (v2.reliabilityVersion === 2) {
+      keyValue(doc, "Evidence sufficiency", `${num(v2.evidenceSufficiency)} / 100 (input completeness)`);
+      keyValue(
+        doc,
+        "Model agreement",
+        v2.modelAgreement === null || v2.modelAgreement === undefined
+          ? "not measured (single run)"
+          : `${num(v2.modelAgreement)} / 100 across ${num(v2.sampleCount)} samples (answer stability, not accuracy)`
+      );
+      if (v2.retrievalSupport !== null && v2.retrievalSupport !== undefined) keyValue(doc, "Retrieval support", `${num(v2.retrievalSupport)} / 100 (embedding cosine)`);
+    }
     keyValue(doc, "Confidence", explanation?.confidence !== undefined && explanation?.confidence !== null ? `${Math.round(Number(explanation.confidence))} / 100` : "—");
     doc.moveDown(0.3);
     paragraph(doc, str(explanation?.reason));
+    if (typeof v2.reliabilityNote === "string") {
+      doc.moveDown(0.2);
+      doc.font("Helvetica-Oblique").fontSize(9).fillColor("#555555").text(v2.reliabilityNote, { align: "left" }).fillColor("#000000").font("Helvetica");
+    }
 
     switch (report.reportType) {
       case "EXAM_QUALITY": {
