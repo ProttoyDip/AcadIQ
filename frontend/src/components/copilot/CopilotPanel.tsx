@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, Send, Gauge, Wrench, Copy, Target, FileEdit } from "lucide-react";
+import { Sparkles, Send, Gauge, Wrench, Copy, Target, FileEdit, ChevronDown } from "lucide-react";
 import { useCopilotChat, useCopilotSession } from "../../hooks/useCopilot";
 import { apiErrorMessage } from "../../services/api";
 import { Button } from "../ui/button";
@@ -42,6 +42,7 @@ export default function CopilotPanel({ courseId, examId, reportId, contextLabel 
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [actionsOpen, setActionsOpen] = useState(true);
   const seededRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -69,6 +70,7 @@ export default function CopilotPanel({ courseId, examId, reportId, contextLabel 
   async function send(message: string) {
     if (!message.trim() || chat.isPending) return;
     setError(null);
+    setActionsOpen(false);
     setTurns((prev) => [...prev, { role: "USER", content: message }]);
     setInput("");
     try {
@@ -85,37 +87,46 @@ export default function CopilotPanel({ courseId, examId, reportId, contextLabel 
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-xl border-2 border-primary-200 bg-card shadow-md dark:border-primary-800">
-      <div className="border-b border-border bg-primary-50/60 px-5 py-4 dark:bg-primary-950/40">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-body font-bold leading-tight text-foreground">AcadIQ Copilot</p>
-            <p className="text-small text-muted-foreground">Ask anything about this report</p>
-          </div>
+      <div className="flex items-center gap-3 border-b border-border bg-primary-50/60 px-4 py-3 dark:bg-primary-950/40">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+          <Sparkles className="h-4.5 w-4.5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-body font-bold leading-tight text-foreground">AcadIQ Copilot</p>
+          <p className="truncate text-small text-muted-foreground">Ask anything about this report</p>
         </div>
         {contextLabel && (
-          <p className="mt-3 inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{contextLabel}</p>
+          <span className="hidden shrink-0 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary sm:inline-flex">{contextLabel}</span>
         )}
       </div>
 
-      <div className="border-b border-border px-5 py-3">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quick actions</p>
-        <div className="flex flex-wrap gap-2">
-          {QUICK_ACTIONS.map((action) => (
-            <QuickActionButton
-              key={action.label}
-              icon={action.icon}
-              label={action.label}
-              onClick={() => send(action.prompt)}
-              disabled={chat.isPending}
-            />
-          ))}
-        </div>
+      <div className="border-b border-border">
+        <button
+          type="button"
+          onClick={() => setActionsOpen((open) => !open)}
+          aria-expanded={actionsOpen}
+          aria-controls="copilot-quick-actions"
+          className="flex w-full items-center justify-between px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+        >
+          <span>Quick actions</span>
+          <ChevronDown className={`h-4 w-4 transition-transform ${actionsOpen ? "rotate-180" : ""}`} />
+        </button>
+        {actionsOpen && (
+          <div id="copilot-quick-actions" className="flex flex-wrap gap-2 px-4 pb-3">
+            {QUICK_ACTIONS.map((action) => (
+              <QuickActionButton
+                key={action.label}
+                icon={action.icon}
+                label={action.label}
+                onClick={() => send(action.prompt)}
+                disabled={chat.isPending}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto scrollbar-thin px-4 py-4">
         {turns.length === 0 ? (
           <div className="flex h-full min-h-[180px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-primary-200 bg-primary-50/40 px-5 py-8 text-center dark:border-primary-800 dark:bg-primary-950/30">
             <Sparkles className="h-7 w-7 text-primary" />
@@ -142,22 +153,22 @@ export default function CopilotPanel({ courseId, examId, reportId, contextLabel 
           e.preventDefault();
           send(input);
         }}
-        className="border-t-2 border-primary-100 bg-muted/30 p-4 dark:border-primary-900"
+        className="border-t-2 border-primary-100 bg-muted/30 p-3 dark:border-primary-900"
       >
-        <div className="flex items-center gap-2 rounded-xl border-2 border-primary-200 bg-card p-1.5 shadow-sm transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-ring/30 dark:border-primary-800">
+        <div className="flex items-center gap-2 rounded-xl border-2 border-primary-200 bg-card p-1 shadow-sm transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-ring/30 dark:border-primary-800">
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask AcadIQ Copilot…"
             disabled={chat.isPending}
-            className="h-12 border-0 bg-transparent px-3 text-body shadow-none hover:border-0 focus-visible:border-0 focus-visible:ring-0"
+            className="h-11 border-0 bg-transparent px-3 text-body shadow-none hover:border-0 focus-visible:border-0 focus-visible:ring-0"
           />
-          <Button type="submit" size="lg" className="h-11 shrink-0 gap-2 px-5" disabled={chat.isPending || !input.trim()}>
+          <Button type="submit" size="lg" className="h-10 shrink-0 gap-2 px-4" disabled={chat.isPending || !input.trim()}>
             <Send className="h-4 w-4" />
             Send
           </Button>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">Press Enter to send</p>
+        <p className="mt-1.5 text-xs text-muted-foreground">Press Enter to send</p>
       </form>
     </div>
   );

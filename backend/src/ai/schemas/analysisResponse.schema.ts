@@ -89,6 +89,25 @@ export const questionSimilarityResponseSchema = z.object({
   explanation: explanationSchema,
 }).strict();
 
+/** Shortlist→explain variant: the model classifies pre-ranked pairs and may reject them. */
+export const similarityCandidateResponseSchema = z.object({
+  matches: z.array(z.object({
+    currentQuestionId: z.number().int().positive(),
+    previousQuestionId: z.number().int().positive(),
+    similarityPercentage: score,
+    matchType: z.enum(["DUPLICATE", "SIMILAR_CONCEPT", "REPEATED_PATTERN"]),
+    reason: nonEmpty,
+    confidence: score,
+  })),
+  rejectedPairs: z.array(z.object({
+    currentQuestionId: z.number().int().positive(),
+    previousQuestionId: z.number().int().positive(),
+    reason: nonEmpty,
+  })).default([]),
+  recommendation: nonEmpty,
+  explanation: explanationSchema,
+}).strict();
+
 export const academicMemoryResponseSchema = z.object({
   similarQuestions: z.array(z.object({
     newQuestionId: z.number().int().positive(),
@@ -101,6 +120,45 @@ export const academicMemoryResponseSchema = z.object({
   similarityScore: score,
   replacementSuggestion: nonEmpty,
   explanation: explanationSchema,
+}).strict();
+
+export const academicMemoryCandidateResponseSchema = z.object({
+  similarQuestions: z.array(z.object({
+    newQuestionId: z.number().int().positive(),
+    historicalQuestionId: z.number().int().positive(),
+    similarityScore: score,
+    reason: nonEmpty,
+    confidence: score,
+    replacementSuggestion: nonEmpty,
+  })),
+  rejectedPairs: z.array(z.object({
+    newQuestionId: z.number().int().positive(),
+    historicalQuestionId: z.number().int().positive(),
+    reason: nonEmpty,
+  })).default([]),
+  replacementSuggestion: nonEmpty,
+  explanation: explanationSchema,
+}).strict();
+
+export const paperGenerationResponseSchema = z.object({
+  title: nonEmpty.max(200),
+  questions: z.array(z.object({
+    sequenceNumber: z.number().int().positive(),
+    text: nonEmpty.max(4000),
+    marks: z.number().positive(),
+    intendedBloom: bloomLevel,
+    intendedOutcome: z.string().trim().max(30).nullable(),
+    topic: nonEmpty.max(120),
+  })).min(1).max(60),
+  designNotes: nonEmpty,
+}).strict();
+
+export const bloomLabelResponseSchema = z.object({
+  labels: z.array(z.object({
+    questionId: z.number().int().positive(),
+    bloomLevel,
+    topic: nonEmpty.max(120),
+  })).min(1),
 }).strict();
 
 export const questionReviewResponseSchema = z.object({

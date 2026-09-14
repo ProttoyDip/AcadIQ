@@ -1,4 +1,4 @@
-import { runAcademicMemoryPipeline } from "../ai/pipeline/academicMemoryPipeline";
+import { runAcademicMemoryPipeline, MemoryHistoricalQuestion, MemoryNewQuestion } from "../ai/pipeline/academicMemoryPipeline";
 import { AppError } from "../middleware/error.middleware";
 import { AcademicMemoryResult } from "../models/types";
 import { courseRepository } from "../repositories/course.repository";
@@ -8,21 +8,27 @@ import { reportRepository } from "../repositories/report.repository";
 import { MemoryCheckInput } from "../validators/analysis.validator";
 import { applyCalculatedConfidence, withDecisionContract } from "../ai/confidence";
 import { loadReliabilityEvidence } from "./analysisContext.service";
+import { tracedAnalysis } from "./traced";
 
 export const academicMemoryService = {
-  async check(facultyId: number, input: MemoryCheckInput) {
+  check(facultyId: number, input: MemoryCheckInput) {
+    return tracedAnalysis(async () => {
     const course = await courseRepository.findOwnedById(input.courseId, facultyId);
     if (!course) throw new AppError("Course not found", 404);
 
     let questionPaperId = input.questionPaperId;
-    let newQuestions = input.newQuestions?.map((question, index) => ({ id: question.id ?? index + 1, text: question.text }));
+    let newQuestions: MemoryNewQuestion[] | undefined = input.newQuestions?.map((question, index) => ({ id: question.id ?? index + 1, text: question.text }));
     if (questionPaperId) {
       const paper = await documentRepository.findQuestionPaperById(questionPaperId);
       if (!paper || paper.courseId !== input.courseId) {
         throw new AppError("Question paper not found for this course", 404);
       }
       if (!newQuestions) {
-        newQuestions = paper.questions.map((question) => ({ id: question.id, text: question.questionText }));
+        newQuestions = paper.questions.map((question) => ({
+          id: question.id,
+          text: question.questionText,
+          embeddingRef: { ownerType: "QUESTION" as const, ownerId: question.id, courseId: input.courseId },
+        }));
       }
     }
     if (!newQuestions?.length) throw new AppError("No new questions were supplied or extracted", 422);
@@ -31,7 +37,7 @@ export const academicMemoryService = {
     const storedHistory = input.historicalQuestions
       ? undefined
       : await memoryRepository.findHistoricalQuestions(input.courseId, excludedIds);
-    const historicalQuestions = input.historicalQuestions?.map((question, index) => ({
+    const historicalQuestions: MemoryHistoricalQuestion[] = input.historicalQuestions?.map((question, index) => ({
       id: question.id ?? index + 1,
       text: question.text,
       semester: question.semester,
@@ -41,6 +47,10 @@ export const academicMemoryService = {
       text: question.questionText,
       semester: question.semester,
       year: question.year,
+      // Reuse the source question's vector when it exists; otherwise index the history row itself.
+      embeddingRef: question.sourceQuestionId
+        ? { ownerType: "QUESTION" as const, ownerId: question.sourceQuestionId, courseId: input.courseId }
+        : { ownerType: "QUESTION_HISTORY" as const, ownerId: question.id, courseId: input.courseId },
     }));
 
     const evidence = await loadReliabilityEvidence(input.courseId, {
@@ -51,7 +61,7 @@ export const academicMemoryService = {
     });
 
     const result: AcademicMemoryResult = historicalQuestions.length
-      ? await runAcademicMemoryPipeline(newQuestions, historicalQuestions, input.similarityThreshold, evidence)
+      ? await runAcademicMemoryPipeline(newQuestions, historicalQuestions, input.similarityThreshold, evidence, { reliability: input.reliability })
       : {
           similarQuestions: [],
           similarityScore: 0,
@@ -91,5 +101,6 @@ export const academicMemoryService = {
       result.explanation
     );
     return { reportId: report.id, ...completeResult };
+    });
   },
 };

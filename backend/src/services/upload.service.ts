@@ -1,9 +1,11 @@
 import { extractDocumentText } from "../ai/documentTextExtractor";
 import { extractQuestions } from "../ai/questionExtractor";
+import { embeddingService } from "../ai/embedding/embeddingService";
 import { AppError } from "../middleware/error.middleware";
 import { courseRepository } from "../repositories/course.repository";
 import { documentRepository } from "../repositories/document.repository";
 import { UploadedDocument } from "../validators/document.validator";
+import { logger } from "../utils/logger";
 
 async function assertCourseOwnership(courseId: number, facultyId: number) {
   const course = await courseRepository.findOwnedById(courseId, facultyId);
@@ -25,8 +27,8 @@ import { auditService } from "./audit.service";
 export const uploadService = {
   async uploadSyllabus(facultyId: number, courseId: number, file: UploadedDocument) {
     await assertCourseOwnership(courseId, facultyId);
-    await extractDocumentText(file.path, file.mimetype);
-    const doc = await documentRepository.createSyllabusDocument(facultyId, fileData(courseId, file));
+    const extractedText = await extractDocumentText(file.path, file.mimetype);
+    const doc = await documentRepository.createSyllabusDocument(facultyId, { ...fileData(courseId, file), extractedText });
     await auditService.recordAuditLog({
       userId: facultyId,
       action: "Faculty uploaded syllabus",
@@ -57,6 +59,14 @@ export const uploadService = {
       action: "Faculty uploaded exam paper",
       document: file.originalname,
     });
+    // Outside the transaction on purpose: inference must never hold row locks or fail the upload.
+    if (embeddingService.available) {
+      try {
+        await embeddingService.indexPaper(paper.id);
+      } catch (error) {
+        logger.warn("embedding_index_failed", { paperId: paper.id, reason: error instanceof Error ? error.message : String(error) });
+      }
+    }
     return paper;
   },
 };

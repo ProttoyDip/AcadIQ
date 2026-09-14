@@ -14,6 +14,7 @@ import Reports from "./pages/Reports";
 import UploadAnalysis from "./pages/UploadAnalysis";
 import AnalysisReport from "./pages/AnalysisReport";
 import QuestionMemory from "./pages/QuestionMemory";
+import PaperGenerator from "./pages/PaperGenerator";
 import Settings from "./pages/Settings";
 import DualEvaluatorPage from "./pages/DualEvaluatorPage";
 import AdminUsers from "./pages/AdminUsers";
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="/reports" element={<Reports />} />
             <Route path="/reports/:id" element={<AnalysisReport />} />
             <Route path="/question-memory" element={<QuestionMemory />} />
+            <Route path="/paper-generator" element={<PaperGenerator />} />
             <Route path="/dual-evaluate" element={<DualEvaluatorPage />} />
             <Route path="/settings" element={<Settings />} />
           </Route>

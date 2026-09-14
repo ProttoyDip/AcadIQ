@@ -1,12 +1,15 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { analysisService, CourseOutcomeInput } from "../services/analysisService";
 import { reportKeys } from "./useReports";
+import { ReliabilityMode } from "../types";
+
+type PaperArgs = { courseId: number; questionPaperId: number; reliability?: ReliabilityMode };
 
 export function useAnalyzeExam() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ courseId, questionPaperId }: { courseId: number; questionPaperId: number }) =>
-      analysisService.analyzeExam(courseId, questionPaperId),
+    mutationFn: ({ courseId, questionPaperId, reliability }: PaperArgs) =>
+      analysisService.analyzeExam(courseId, questionPaperId, reliability),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: reportKeys.all }),
   });
 }
@@ -27,11 +30,13 @@ export function useAnalyzeSimilarity() {
       courseId,
       currentPaperId,
       previousPaperId,
+      reliability,
     }: {
       courseId: number;
       currentPaperId: number;
       previousPaperId: number;
-    }) => analysisService.analyzeSimilarity(courseId, currentPaperId, previousPaperId),
+      reliability?: ReliabilityMode;
+    }) => analysisService.analyzeSimilarity(courseId, currentPaperId, previousPaperId, reliability),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: reportKeys.all }),
   });
 }
@@ -39,8 +44,8 @@ export function useAnalyzeSimilarity() {
 export function useReviewQuestions() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ courseId, questionPaperId }: { courseId: number; questionPaperId: number }) =>
-      analysisService.reviewQuestions(courseId, questionPaperId),
+    mutationFn: ({ courseId, questionPaperId, reliability }: PaperArgs) =>
+      analysisService.reviewQuestions(courseId, questionPaperId, reliability),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: reportKeys.all }),
   });
 }
@@ -52,11 +57,8 @@ export function useMapCourseOutcomes() {
       courseId,
       questionPaperId,
       courseOutcomes,
-    }: {
-      courseId: number;
-      questionPaperId: number;
-      courseOutcomes?: CourseOutcomeInput[];
-    }) => analysisService.mapCourseOutcomes(courseId, questionPaperId, courseOutcomes),
+      reliability,
+    }: PaperArgs & { courseOutcomes?: CourseOutcomeInput[] }) => analysisService.mapCourseOutcomes(courseId, questionPaperId, courseOutcomes, reliability),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: reportKeys.all }),
   });
 }

@@ -6,6 +6,7 @@ import {
   History,
   BrainCircuit,
   FileBarChart,
+  Wand2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -37,6 +38,7 @@ export const navGroups: NavGroup[] = [
     links: [
       { to: "/dual-evaluate", label: "Dual LLM Evaluator", icon: BrainCircuit },
       { to: "/question-memory", label: "Academic Memory", icon: History },
+      { to: "/paper-generator", label: "Paper Generator", icon: Wand2 },
     ],
   },
   {

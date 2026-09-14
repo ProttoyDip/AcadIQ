@@ -2,6 +2,9 @@ import { env } from "../config/env";
 import { z } from "zod";
 import { calculateConfidence, calculateDocumentCompleteness } from "../ai/confidence";
 import { callValidatedLlmJson } from "../ai/validatedLlm";
+import { buildDualEvaluationSystemPrompt, buildDualEvaluationUserPrompt, DUAL_EVALUATION_PROMPT } from "../ai/prompts/dualEvaluation.prompt";
+import { redactPii, totalRedactions } from "../ai/redaction";
+import { llmRateGate } from "../ai/rateGate";
 import { logger } from "../utils/logger";
 
 export interface DualEvaluationInput {
@@ -9,6 +12,8 @@ export interface DualEvaluationInput {
   maxMarks?: number;
   modelAnswer: string;
   studentAnswer: string;
+  /** Known identifiers (student id, name) to scrub before the answer leaves the server. */
+  studentIdentifiers?: string[];
 }
 
 const rubricScore = z.number().min(0).max(10);
@@ -123,29 +128,18 @@ function providerOf(modelId: string): string {
 }
 
 async function askJuror(modelId: string, input: DualEvaluationInput, maxMarks: number): Promise<DirectEvaluation> {
-  const promptSystem = `You are a strict, fair university examiner. Score the student's answer against the reference answer on a 0-10 scale for each criterion:
-1. conceptual_accuracy (0-10): are the core concepts correct?
-2. completeness (0-10): how much of the reference content is covered?
-3. clarity (0-10): is the answer well structured and unambiguous?
-4. terminology (0-10): is domain vocabulary used precisely?
-
-Then set assigned_marks out of ${maxMarks} consistent with those scores, and write 2-4 sentences of specific, actionable feedback naming what was correct and what was missing.
-
-Return ONLY JSON in this exact shape:
-{
-  "conceptual_accuracy": number,
-  "completeness": number,
-  "clarity": number,
-  "terminology": number,
-  "assigned_marks": number,
-  "feedback": "string"
-}`;
-
-  const promptUser = `Question: ${input.question}\nMax Marks: ${maxMarks}\nReference Answer: ${input.modelAnswer}\nStudent Answer: ${input.studentAnswer}`;
-
-  return callValidatedLlmJson(promptSystem, promptUser, directEvaluationSchema, `dual-evaluation:${modelId}`, {
-    model: modelId,
+  const promptUser = buildDualEvaluationUserPrompt({
+    question: input.question,
+    maxMarks,
+    modelAnswer: input.modelAnswer,
+    studentAnswer: input.studentAnswer,
   });
+  return llmRateGate.run(() =>
+    callValidatedLlmJson(buildDualEvaluationSystemPrompt(maxMarks), promptUser, directEvaluationSchema, `dual-evaluation:${modelId}`, {
+      model: modelId,
+      prompt: { id: DUAL_EVALUATION_PROMPT.id, version: DUAL_EVALUATION_PROMPT.version, hash: DUAL_EVALUATION_PROMPT.hash },
+    })
+  );
 }
 
 function withDualDecisionContract(result: DualResult, input: DualEvaluationInput) {
@@ -169,8 +163,12 @@ function withDualDecisionContract(result: DualResult, input: DualEvaluationInput
 }
 
 export const dualEvaluationService = {
-  async evaluate(_userId: string, input: DualEvaluationInput) {
-    const maxMarks = input.maxMarks || 10;
+  async evaluate(_userId: string, rawInput: DualEvaluationInput) {
+    const maxMarks = rawInput.maxMarks || 10;
+    // Governance: student work never leaves the server un-redacted (design item #6).
+    const redacted = redactPii(rawInput.studentAnswer, rawInput.studentIdentifiers ?? []);
+    const input: DualEvaluationInput = { ...rawInput, studentAnswer: redacted.text };
+    if (totalRedactions(redacted)) logger.info("dual_eval_pii_redacted", { redactions: redacted.redactions });
 
     // Tier 1: dedicated Python multi-model service, when deployed.
     const aiServiceUrl = process.env.AI_SERVICE_URL || "http://ai-service:8000";
@@ -322,6 +320,6 @@ export const dualEvaluationService = {
       models,
     });
 
-    return withDualDecisionContract(result, input);
+    return { ...withDualDecisionContract(result, input), privacy: { pii_redactions: redacted.redactions } };
   },
 };

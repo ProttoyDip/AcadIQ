@@ -73,7 +73,7 @@ export async function retrieveAcademicData(
   try {
     const syllabusDoc = await documentRepository.findLatestSyllabus(courseId);
     if (syllabusDoc) {
-      syllabusExcerpt = await extractDocumentText(syllabusDoc.filePath, syllabusDoc.mimeType);
+      syllabusExcerpt = syllabusDoc.extractedText?.trim() || (await extractDocumentText(syllabusDoc.filePath, syllabusDoc.mimeType));
     }
   } catch {
     syllabusExcerpt = undefined;

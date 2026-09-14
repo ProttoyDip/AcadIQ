@@ -8,6 +8,7 @@ export const documentRepository = {
     originalName: string;
     mimeType: string;
     fileSize: number;
+    extractedText?: string;
   }) {
     return prisma.$transaction(async (tx) => {
       const document = await tx.syllabusDocument.create({ data });
@@ -74,6 +75,10 @@ export const documentRepository = {
 
   findLatestSyllabus(courseId: number) {
     return prisma.syllabusDocument.findFirst({ where: { courseId }, orderBy: { uploadedAt: "desc" } });
+  },
+
+  saveSyllabusText(id: number, extractedText: string) {
+    return prisma.syllabusDocument.update({ where: { id }, data: { extractedText } });
   },
 
   findQuestionPapersByCourse(courseId: number) {

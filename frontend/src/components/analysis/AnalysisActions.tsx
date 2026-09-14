@@ -58,6 +58,8 @@ export default function AnalysisActions({
   const [result, setResult] = useState<FullAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [runningSingle, setRunningSingle] = useState<SingleKey | null>(null);
+  // Verified = 3 sampled calls per analysis with model-agreement reporting. Full audit is always fast (5 analyses × 3 = too many calls).
+  const [verified, setVerified] = useState(false);
 
   const busy = full.isPending || runningSingle !== null;
 
@@ -84,10 +86,10 @@ export default function AnalysisActions({
     setRunningSingle(key);
     onStart?.();
     try {
-      const args = { courseId, questionPaperId };
+      const args = { courseId, questionPaperId, reliability: verified ? ("verified" as const) : ("fast" as const) };
       const outcome =
         key === "exam" ? await exam.mutateAsync(args)
-        : key === "syllabus" ? await syllabus.mutateAsync(args)
+        : key === "syllabus" ? await syllabus.mutateAsync({ courseId, questionPaperId })
         : key === "review" ? await review.mutateAsync(args)
         : await co.mutateAsync(args);
       navigate(`/reports/${outcome.reportId}`);
@@ -122,6 +124,10 @@ export default function AnalysisActions({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+        <label className="ml-1 inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground" title="Runs the single analysis 3 times at higher temperature and reports how stable the answer was. Slower; uses ~3× the LLM budget.">
+          <input type="checkbox" className="h-3.5 w-3.5 accent-primary" checked={verified} onChange={(e) => setVerified(e.target.checked)} disabled={disabled || busy} />
+          Verified (3 samples, single analyses only)
+        </label>
       </div>
 
       {error && (

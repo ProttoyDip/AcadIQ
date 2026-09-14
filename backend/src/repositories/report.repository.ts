@@ -1,6 +1,8 @@
 import { Prisma, Priority, ReportType } from "@prisma/client";
 import { prisma } from "../database/prismaClient";
 import { AIExplanationResult, ExamQualityResult, PriorityValue } from "../models/types";
+import { currentTraceScope, drainRuns } from "../ai/trace";
+import { provenanceRepository } from "./provenance.repository";
 
 type ReportTypeValue =
   | "EXAM_QUALITY"
@@ -8,7 +10,8 @@ type ReportTypeValue =
   | "QUESTION_SIMILARITY"
   | "QUESTION_REVIEW"
   | "CO_MAPPING"
-  | "ACADEMIC_MEMORY";
+  | "ACADEMIC_MEMORY"
+  | "GENERATED_PAPER";
 
 interface ReportData {
   facultyId: number;
@@ -49,6 +52,8 @@ function reportCreateData(
         decision: explanation.decision,
         reason: explanation.reason,
         confidence: explanation.confidence,
+        evidenceSufficiency: explanation.evidenceSufficiency ?? null,
+        modelAgreement: explanation.modelAgreement ?? null,
       },
     },
   };
@@ -61,31 +66,41 @@ const completeReportInclude = {
   coMappings: { include: { courseOutcome: true } },
 } as const;
 
+function auditData(data: ReportData) {
+  return {
+    userId: data.facultyId,
+    action: "Faculty generated analysis",
+    document: data.questionPaperId ? `question-paper:${data.questionPaperId}` : `course:${data.courseId}`,
+  };
+}
+
+/** Writes the LLM runs accumulated in the current trace scope against the new report, same transaction. */
+async function attachRuns(tx: Prisma.TransactionClient, reportId: number) {
+  const runs = drainRuns();
+  if (!runs.length) return;
+  await provenanceRepository.createRuns(tx, runs, reportId, currentTraceScope()?.requestId ?? null);
+}
+
 export const reportRepository = {
   async createExplainable(
     data: ReportData,
     recommendations: Array<{ message: string; priority: PriorityValue }>,
     explanation: AIExplanationResult
   ) {
-    const [report] = await prisma.$transaction([
-      prisma.analysisReport.create({
+    return prisma.$transaction(async (tx) => {
+      const report = await tx.analysisReport.create({
         data: reportCreateData(data, recommendations, explanation),
         include: completeReportInclude,
-      }),
-      prisma.auditLog.create({
-        data: {
-          userId: data.facultyId,
-          action: "Faculty generated analysis",
-          document: data.questionPaperId ? `question-paper:${data.questionPaperId}` : `course:${data.courseId}`,
-        },
-      }),
-    ]);
-    return report;
+      });
+      await tx.auditLog.create({ data: auditData(data) });
+      await attachRuns(tx, report.id);
+      return report;
+    });
   },
 
   async createExamAnalysis(data: ReportData, result: ExamQualityResult) {
-    const [report] = await prisma.$transaction([
-      prisma.analysisReport.create({
+    return prisma.$transaction(async (tx) => {
+      const report = await tx.analysisReport.create({
         data: {
           ...reportCreateData(data, result.recommendations, result.explanation),
           examQualityScore: {
@@ -96,20 +111,17 @@ export const reportRepository = {
               issues: result.issues as unknown as Prisma.InputJsonValue,
               recommendations: result.recommendations as unknown as Prisma.InputJsonValue,
               confidenceScore: result.explanation.confidence,
+              modelAgreement: result.explanation.modelAgreement ?? null,
+              qualityScoreSpread: result.qualityScoreSpread ?? null,
             },
           },
         },
         include: completeReportInclude,
-      }),
-      prisma.auditLog.create({
-        data: {
-          userId: data.facultyId,
-          action: "Faculty generated analysis",
-          document: data.questionPaperId ? `question-paper:${data.questionPaperId}` : `course:${data.courseId}`,
-        },
-      }),
-    ]);
-    return report;
+      });
+      await tx.auditLog.create({ data: auditData(data) });
+      await attachRuns(tx, report.id);
+      return report;
+    });
   },
 
   async createCoAnalysis(
@@ -145,13 +157,8 @@ export const reportRepository = {
           })),
         });
       }
-      await tx.auditLog.create({
-        data: {
-          userId: data.facultyId,
-          action: "Faculty generated analysis",
-          document: data.questionPaperId ? `question-paper:${data.questionPaperId}` : `course:${data.courseId}`,
-        },
-      });
+      await tx.auditLog.create({ data: auditData(data) });
+      await attachRuns(tx, report.id);
       return tx.analysisReport.findUniqueOrThrow({ where: { id: report.id }, include: completeReportInclude });
     });
   },

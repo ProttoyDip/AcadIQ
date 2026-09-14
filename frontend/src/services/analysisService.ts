@@ -6,6 +6,7 @@ import {
   QuestionReviewResult,
   CoMappingResult,
   FullAnalysisResult,
+  ReliabilityMode,
 } from "../types";
 
 export interface CourseOutcomeInput {
@@ -14,27 +15,27 @@ export interface CourseOutcomeInput {
 }
 
 export const analysisService = {
-  analyzeExam: (courseId: number, questionPaperId: number) =>
-    api.post<{ data: ExamQualityResult }>("/analysis/exam", { courseId, questionPaperId }).then((r) => r.data.data),
+  analyzeExam: (courseId: number, questionPaperId: number, reliability?: ReliabilityMode) =>
+    api.post<{ data: ExamQualityResult }>("/analysis/exam", { courseId, questionPaperId, reliability }).then((r) => r.data.data),
 
   analyzeSyllabus: (courseId: number, questionPaperId: number) =>
     api
       .post<{ data: SyllabusCoverageResult }>("/analysis/syllabus", { courseId, questionPaperId })
       .then((r) => r.data.data),
 
-  analyzeSimilarity: (courseId: number, currentPaperId: number, previousPaperId: number) =>
+  analyzeSimilarity: (courseId: number, currentPaperId: number, previousPaperId: number, reliability?: ReliabilityMode) =>
     api
-      .post<{ data: QuestionSimilarityResult }>("/analysis/similarity", { courseId, currentPaperId, previousPaperId })
+      .post<{ data: QuestionSimilarityResult }>("/analysis/similarity", { courseId, currentPaperId, previousPaperId, reliability })
       .then((r) => r.data.data),
 
-  reviewQuestions: (courseId: number, questionPaperId: number) =>
+  reviewQuestions: (courseId: number, questionPaperId: number, reliability?: ReliabilityMode) =>
     api
-      .post<{ data: QuestionReviewResult }>("/analysis/question-review", { courseId, questionPaperId })
+      .post<{ data: QuestionReviewResult }>("/analysis/question-review", { courseId, questionPaperId, reliability })
       .then((r) => r.data.data),
 
-  mapCourseOutcomes: (courseId: number, questionPaperId: number, courseOutcomes?: CourseOutcomeInput[]) =>
+  mapCourseOutcomes: (courseId: number, questionPaperId: number, courseOutcomes?: CourseOutcomeInput[], reliability?: ReliabilityMode) =>
     api
-      .post<{ data: CoMappingResult }>("/analysis/co-mapping", { courseId, questionPaperId, courseOutcomes })
+      .post<{ data: CoMappingResult }>("/analysis/co-mapping", { courseId, questionPaperId, courseOutcomes, reliability })
       .then((r) => r.data.data),
 
   analyzeFull: (courseId: number, questionPaperId: number) =>
