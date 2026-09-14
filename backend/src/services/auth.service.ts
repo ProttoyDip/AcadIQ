@@ -3,8 +3,10 @@ import { userRepository } from "../repositories/user.repository";
 import { courseRepository } from "../repositories/course.repository";
 import { hashPassword, comparePassword } from "../utils/hash";
 import { signToken } from "../utils/jwt";
-import { sendPasswordResetEmail } from "../utils/mailer";
+import { sendPasswordResetEmail, isMailerConfigured } from "../utils/mailer";
 import { AppError } from "../middleware/error.middleware";
+import { env } from "../config/env";
+import { logger } from "../utils/logger";
 import { RegisterInput, LoginInput, ForgotPasswordInput, ResetPasswordInput } from "../validators/auth.validator";
 
 export const authService = {
@@ -90,10 +92,21 @@ export const authService = {
       const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
       const resetUrl = `${frontendUrl}/reset-password?token=${rawToken}`;
 
-      try {
-        await sendPasswordResetEmail(user.email, resetUrl);
-      } catch (err) {
-        console.error("Failed to send password reset email via SMTP:", err);
+      if (isMailerConfigured) {
+        try {
+          await sendPasswordResetEmail(user.email, resetUrl);
+        } catch (err) {
+          logger.error("password_reset_email_failed", { error: err instanceof Error ? err.message : String(err) });
+        }
+      } else if (env.nodeEnv !== "production") {
+        // No SMTP in local dev: hand the link back so the flow can still be exercised.
+        logger.warn("password_reset_email_skipped_no_smtp", { resetUrl });
+        return {
+          message: "SMTP is not configured, so no email was sent. Use the link below to reset the password (development only).",
+          devResetUrl: resetUrl,
+        };
+      } else {
+        logger.error("password_reset_email_unconfigured", { userId: user.id });
       }
     }
 

@@ -1,15 +1,21 @@
 import * as React from "react";
 import { cn } from "../../lib/utils";
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn("rounded-lg border border-border bg-card text-card-foreground shadow-card", className)}
-      {...props}
-    />
-  )
-);
+const Card = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement> & { interactive?: boolean }
+>(({ className, interactive = false, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn(
+      "rounded-xl border border-border bg-card text-card-foreground shadow-card",
+      interactive &&
+        "transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-primary-200 hover:shadow-elevated dark:hover:border-primary-800",
+      className
+    )}
+    {...props}
+  />
+));
 Card.displayName = "Card";
 
 const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
@@ -19,9 +25,9 @@ const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
 );
 CardHeader.displayName = "CardHeader";
 
-const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
+const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h3 ref={ref as any} className={cn("text-section font-semibold leading-tight tracking-tight", className)} {...props} />
+    <h3 ref={ref} className={cn("text-section leading-tight", className)} {...props} />
   )
 );
 CardTitle.displayName = "CardTitle";

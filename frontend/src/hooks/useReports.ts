@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { reportService } from "../services/reportService";
 
 export const reportKeys = {
@@ -16,9 +16,4 @@ export function useReport(id: number | null) {
     queryFn: () => reportService.getById(id as number),
     enabled: id !== null,
   });
-}
-
-export function useInvalidateReports() {
-  const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: reportKeys.all });
 }

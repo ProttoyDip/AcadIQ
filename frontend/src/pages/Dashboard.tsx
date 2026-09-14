@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { GraduationCap, Copy, Target, Sparkles, GitCompareArrows, Scale, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
+import { Link } from "react-router-dom";
+import { GraduationCap, Copy, Target, Sparkles, GitCompareArrows, Scale, TrendingUp, TrendingDown, AlertTriangle, UploadCloud, BookOpen, ArrowRight } from "lucide-react";
 import { useCourses } from "../hooks/useCourses";
 import { useReports } from "../hooks/useReports";
 import { useAuth } from "../hooks/useAuth";
@@ -25,8 +26,7 @@ export default function Dashboard() {
 
   const isLoading = coursesLoading || reportsLoading;
   const hasError = coursesError || reportsError;
-
-  const DEMO_MODE = reports?.length === 0;
+  const noReportsYet = !isLoading && (reports?.length ?? 0) === 0;
 
   const examReports = useMemo(
     () => (reports ?? []).filter((r) => r.reportType === "EXAM_QUALITY").slice().reverse(),
@@ -42,57 +42,47 @@ export default function Dashboard() {
   const previousExam = examReports[examReports.length - 2]?.resultJson as unknown as ExamQualityResult | undefined;
   const latestCoMapping = coMappingReports[0]?.resultJson as unknown as CoMappingResult | undefined;
 
-  const trendData = useMemo(() => {
-    if (DEMO_MODE) {
-      return [
-        { label: "Feb 10", score: 72 },
-        { label: "Feb 24", score: 75 },
-        { label: "Mar 08", score: 78 },
-        { label: "Apr 15", score: 82 },
-        { label: "May 02", score: 86 },
-      ];
-    }
-    return examReports.slice(-8).map((r) => ({
-      label: formatDate(r.createdAt).replace(/,.*/, ""),
-      score: Math.round((r.resultJson as unknown as ExamQualityResult).overallScore),
-    }));
-  }, [examReports, DEMO_MODE]);
+  const trendData = useMemo(
+    () =>
+      examReports.slice(-8).map((r) => ({
+        label: formatDate(r.createdAt).replace(/,.*/, ""),
+        score: Math.round((r.resultJson as unknown as ExamQualityResult).overallScore),
+      })),
+    [examReports]
+  );
 
-  const avgScore = DEMO_MODE ? 86 : examReports.length > 0
+  const avgScore = examReports.length > 0
     ? Math.round(examReports.reduce((sum, r) => sum + (r.resultJson as unknown as ExamQualityResult).overallScore, 0) / examReports.length)
     : null;
 
-  const scoreDelta = DEMO_MODE ? 8 : latestExam && previousExam ? Math.round(latestExam.overallScore - previousExam.overallScore) : null;
+  const scoreDelta = latestExam && previousExam ? Math.round(latestExam.overallScore - previousExam.overallScore) : null;
 
-  const totalRecommendations = DEMO_MODE ? 3 : (reports ?? []).reduce((sum, r) => sum + r.recommendations.length, 0);
+  const totalRecommendations = (reports ?? []).reduce((sum, r) => sum + r.recommendations.length, 0);
 
   // Repeated Questions Detected: near-duplicate matches (>=75% similarity) found
   // across every academic memory check the faculty member has run.
-  const repeatedQuestionCount = DEMO_MODE ? 2 : similarityReports.reduce((sum, r) => {
+  const repeatedQuestionCount = similarityReports.reduce((sum, r) => {
     const result = r.resultJson as unknown as QuestionSimilarityResult;
     return sum + result.matches.filter((m) => m.similarityPercentage >= 75).length;
   }, 0);
 
   // CO Coverage Health: prefer a real CO Mapping report; fall back to the
   // latest exam's learning-outcome alignment when none has been run yet.
-  const coverageOutcomes = DEMO_MODE ? [100, 40, 80] : latestCoMapping
+  const coverageOutcomes = latestCoMapping
     ? Object.values(latestCoMapping.coverage)
     : (latestExam?.learningOutcomeAlignment ?? []).map((o) => (o.addressed ? 100 : 0));
-  const coCoverageHealth = DEMO_MODE ? 73 :
+  const coCoverageHealth =
     coverageOutcomes.length > 0
       ? Math.round(coverageOutcomes.reduce((a, b) => a + b, 0) / coverageOutcomes.length)
       : null;
   const weakOutcomeCount = coverageOutcomes.filter((p) => p < 50).length;
 
-  const difficultyBuckets = DEMO_MODE ? { Easy: 60, Medium: 30, Hard: 10 } as any : latestExam ? difficultyBucketBreakdown(latestExam.bloomDistribution) : null;
-  const difficultyImbalanced = DEMO_MODE ? false : !!difficultyBuckets && difficultyBuckets.Easy > 55;
+  const difficultyBuckets = latestExam ? difficultyBucketBreakdown(latestExam.bloomDistribution) : null;
+  const difficultyImbalanced = !!difficultyBuckets && difficultyBuckets.Easy > 55;
 
   const courseById = useMemo(() => new Map((courses ?? []).map((c) => [c.id, c])), [courses]);
 
-  const recentItems: RecentReportItem[] = DEMO_MODE ? [
-    { id: 1, title: "Database Midterm — Exam Quality", meta: "Issues: 3", reportType: "EXAM_QUALITY", score: 86, createdAt: new Date().toISOString(), href: "#" },
-    { id: 2, title: "Software Engineering — CO Mapping", meta: "Issues: 1", reportType: "CO_MAPPING", score: 92, createdAt: new Date(Date.now() - 86400000).toISOString(), href: "#" },
-  ] as any : (reports ?? []).slice(0, 5).map((r) => {
+  const recentItems: RecentReportItem[] = (reports ?? []).slice(0, 5).map((r) => {
     const course = r.courseId ? courseById.get(r.courseId) : undefined;
     return {
       id: r.id,
@@ -128,6 +118,43 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col gap-8">
       <WelcomeHeader name={user?.name} />
+
+      {noReportsYet && (
+        <section className="rounded-2xl border border-primary-200 bg-gradient-to-br from-primary-50/70 via-card to-card p-6 shadow-xs dark:border-primary-800 dark:from-primary-950/40">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-xl">
+              <p className="text-xs font-bold uppercase tracking-wider text-primary">Get started</p>
+              <h2 className="mt-1 text-lg font-bold tracking-tight text-foreground">Your dashboard fills in after your first audit</h2>
+              <p className="mt-1.5 text-small text-muted-foreground">
+                Metrics, trends and risk flags below are computed only from analyses you run — nothing here is
+                sample data. Three steps to your first report:
+              </p>
+              <ol className="mt-4 grid gap-3 sm:grid-cols-3">
+                {[
+                  { icon: BookOpen, title: "Add a course", text: (courses?.length ?? 0) > 0 ? `${courses!.length} ready` : "Code, title, outcomes" },
+                  { icon: UploadCloud, title: "Upload documents", text: "Syllabus + question paper" },
+                  { icon: Sparkles, title: "Run full audit", text: "All five analyses at once" },
+                ].map((step, i) => (
+                  <li key={step.title} className="flex items-start gap-2.5 rounded-lg border border-border/70 bg-card/80 p-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">{i + 1}</span>
+                    <div className="min-w-0">
+                      <p className="text-small font-semibold text-foreground">{step.title}</p>
+                      <p className="text-xs text-muted-foreground">{step.text}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <Link
+              to={(courses?.length ?? 0) > 0 ? "/upload" : "/courses"}
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-primary px-5 py-3 text-small font-semibold text-primary-foreground shadow-card transition-colors hover:bg-primary-700"
+            >
+              {(courses?.length ?? 0) > 0 ? "Upload and analyze a paper" : "Create your first course"}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </section>
+      )}
 
       <section>
         <div className="mb-3 flex items-center justify-between">
@@ -186,13 +213,13 @@ export default function Dashboard() {
                 </div>
                 <div className="mt-3 flex items-baseline gap-1.5">
                   <span className="text-3xl font-bold tracking-tight text-foreground tabular-nums">
-                    {latestExam ? Math.round(latestExam.overallScore) : "86"}
+                    {latestExam ? Math.round(latestExam.overallScore) : "—"}
                   </span>
                   <span className="text-sm font-medium text-muted-foreground">/100</span>
                 </div>
               </div>
               <p className="mt-3 text-xs text-muted-foreground border-t border-border/60 pt-2 font-medium">
-                {latestExam ? "Active Analysis" : "Spring 2026 Examination"}
+                {latestExam ? "Latest exam quality analysis" : "No exam analyzed yet"}
               </p>
             </div>
             
@@ -206,13 +233,13 @@ export default function Dashboard() {
                 </div>
                 <div className="mt-3 flex items-baseline gap-1.5">
                   <span className="text-3xl font-bold tracking-tight text-foreground/80 tabular-nums">
-                    {previousExam ? Math.round(previousExam.overallScore) : "78"}
+                    {previousExam ? Math.round(previousExam.overallScore) : "—"}
                   </span>
                   <span className="text-sm font-medium text-muted-foreground">/100</span>
                 </div>
               </div>
               <p className="mt-3 text-xs text-muted-foreground border-t border-border/60 pt-2 font-medium">
-                {previousExam ? "Historical Baseline" : "Fall 2025 Baseline"}
+                {previousExam ? "Previous exam quality analysis" : "Analyze a second paper to compare"}
               </p>
             </div>
           </div>

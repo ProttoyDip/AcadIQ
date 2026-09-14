@@ -51,7 +51,7 @@ export default function Login() {
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Password</Label>
-            <Link to="/forgot-password" className="text-xs font-medium text-primary-700 hover:underline">
+            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
               Forgot password?
             </Link>
           </div>
@@ -72,7 +72,7 @@ export default function Login() {
 
         <p className="text-center text-small text-muted-foreground">
           No account?{" "}
-          <Link to="/register" className="font-medium text-primary-700 hover:underline">
+          <Link to="/register" className="font-medium text-primary hover:underline">
             Register
           </Link>
         </p>

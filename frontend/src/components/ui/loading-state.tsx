@@ -5,7 +5,7 @@ import { cn } from "../../lib/utils";
 export function LoadingState({ label = "Loading...", className }: { label?: string; className?: string }) {
   return (
     <div className={cn("flex flex-col items-center justify-center gap-2 py-14 text-muted-foreground", className)}>
-      <Loader2 className="h-5 w-5 animate-spin text-primary-600" />
+      <Loader2 className="h-5 w-5 animate-spin text-primary" />
       <p className="text-small">{label}</p>
     </div>
   );

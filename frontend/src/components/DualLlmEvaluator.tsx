@@ -47,6 +47,8 @@ interface RubricBreakdown {
 
 interface ModelEvalResult {
   name: string;
+  provider?: string;
+  kind?: 'llm' | 'heuristic';
   assigned_marks: number;
   rubric_score: number;
   rubric_breakdown: RubricBreakdown;
@@ -58,6 +60,12 @@ interface MultiLlmEvaluationResponse {
   max_marks: number;
   student_answer: string;
   reference_answer?: string;
+  jury?: {
+    mode: 'multi-model' | 'single-model' | 'heuristic';
+    requested: number;
+    responded: number;
+    failed: { name: string; error: string }[];
+  };
   consensus: {
     assigned_marks: number;
     percentage: number;
@@ -68,20 +76,11 @@ interface MultiLlmEvaluationResponse {
     has_high_discrepancy: boolean;
     recommendation: string;
   };
-  models: {
-    qwen_2_5?: ModelEvalResult;
-    phi_3_5?: ModelEvalResult;
-    mistral_7b?: ModelEvalResult;
-    llora_7b?: ModelEvalResult;
-    // Fallback key support
-    llama_3_1?: ModelEvalResult;
-    gemma?: ModelEvalResult;
-    qwen?: ModelEvalResult;
-  };
+  models: Record<string, ModelEvalResult>;
 }
 
-// 4 Open-Access Jury Models Specification Metadata
-const JURY_MODEL_SPECS = [
+/** Visual palette cycled across whichever jurors respond; nothing here names a specific model. */
+const JUROR_STYLES = [
   {
     id: 'qwen_2_5',
     name: 'Qwen/Qwen2.5-7B-Instruct',
@@ -96,30 +95,16 @@ const JURY_MODEL_SPECS = [
     params: '7.2B Parameters'
   },
   {
-    id: 'phi_3_5',
-    name: 'microsoft/Phi-3.5-mini-instruct',
-    shortName: 'Phi-3.5 Mini',
-    badge: 'Open MIT License',
     badgeColor: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30',
     borderColor: 'border-amber-500/30 hover:border-amber-500/60',
-    textColor: 'text-amber-600 dark:text-amber-400',
+    textColor: 'text-amber-700 dark:text-amber-300',
     icon: Sparkles,
-    description: 'Open MIT license, 3.8B lightweight model delivering top reasoning and logical breakdown performance.',
-    accessType: 'MIT License',
-    params: '3.8B Parameters'
   },
   {
-    id: 'mistral_7b',
-    name: 'mistralai/Mistral-7B-Instruct-v0.3',
-    shortName: 'Mistral 7B v0.3',
-    badge: 'Apache 2.0 Open',
-    badgeColor: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
-    borderColor: 'border-emerald-500/30 hover:border-emerald-500/60',
-    textColor: 'text-emerald-600 dark:text-emerald-400',
+    badgeColor: 'bg-primary-500/10 text-primary-700 dark:text-primary-300 border-primary-500/30',
+    borderColor: 'border-primary-500/30 hover:border-primary-500/60',
+    textColor: 'text-primary-700 dark:text-primary-300',
     icon: Cpu,
-    description: 'Apache 2.0 open access. Industry benchmark for fast instruction execution and semantic coherence.',
-    accessType: 'Apache 2.0 License',
-    params: '7.3B Parameters'
   },
   {
     id: 'llora_7b',
@@ -135,6 +120,17 @@ const JURY_MODEL_SPECS = [
     params: '7B LoRA Adapter'
   }
 ];
+
+const HEURISTIC_STYLE = {
+  badgeColor: 'bg-muted text-muted-foreground border-border',
+  borderColor: 'border-dashed border-border',
+  textColor: 'text-muted-foreground',
+  icon: Scale,
+};
+
+function shortModelName(id: string): string {
+  return id.includes('/') ? id.split('/').slice(1).join('/') : id;
+}
 
 const SAMPLE_PRESETS = [
   {
@@ -274,7 +270,7 @@ export const DualLlmEvaluator: React.FC = () => {
       setError(
         err.response?.data?.message || 
         err.response?.data?.error?.message || 
-        'Failed to complete 4-model open LLM jury evaluation.'
+        'Failed to complete the multi-model evaluation.'
       );
     } finally {
       setLoading(false);
@@ -322,52 +318,39 @@ export const DualLlmEvaluator: React.FC = () => {
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
-  // Safe accessor helpers for model cards
-  const modelQwen: ModelEvalResult = result?.models?.qwen_2_5 || result?.models?.qwen || {
-    name: 'Qwen/Qwen2.5-7B-Instruct',
-    assigned_marks: result?.consensus.assigned_marks || 0,
-    rubric_score: result?.consensus.rubric_overall_score || 0,
-    rubric_breakdown: result?.consensus.rubric_breakdown || { conceptual_accuracy: 0, completeness: 0, clarity: 0, terminology: 0 },
-    feedback: 'Evaluated using Qwen 2.5 7B Instruct open model (Zero Gated Token Requirement).'
-  };
+  // Render exactly the jurors the backend consulted; a heuristic entry is styled
+  // distinctly so it can never be mistaken for a model opinion.
+  const allModelResults = Object.entries(result?.models ?? {}).map(([id, data], index) => {
+    const heuristic = data.kind === 'heuristic';
+    const style = heuristic ? HEURISTIC_STYLE : JUROR_STYLES[index % JUROR_STYLES.length];
+    return {
+      spec: {
+        id,
+        shortName: heuristic ? data.name : shortModelName(data.name),
+        badge: heuristic ? 'Offline heuristic' : data.provider ?? 'LLM juror',
+        params: heuristic ? 'Word-overlap estimate' : data.name,
+        ...style,
+      },
+      data,
+    };
+  });
 
-  const modelPhi: ModelEvalResult = result?.models?.phi_3_5 || result?.models?.llama_3_1 || {
-    name: 'microsoft/Phi-3.5-mini-instruct',
-    assigned_marks: result?.consensus.assigned_marks || 0,
-    rubric_score: result?.consensus.rubric_overall_score || 0,
-    rubric_breakdown: result?.consensus.rubric_breakdown || { conceptual_accuracy: 0, completeness: 0, clarity: 0, terminology: 0 },
-    feedback: 'Evaluated using Microsoft Phi-3.5 Mini Instruct (Open MIT License).'
-  };
-
-  const modelMistral: ModelEvalResult = result?.models?.mistral_7b || result?.models?.gemma || {
-    name: 'mistralai/Mistral-7B-Instruct-v0.3',
-    assigned_marks: result?.consensus.assigned_marks || 0,
-    rubric_score: result?.consensus.rubric_overall_score || 0,
-    rubric_breakdown: result?.consensus.rubric_breakdown || { conceptual_accuracy: 0, completeness: 0, clarity: 0, terminology: 0 },
-    feedback: 'Evaluated using Mistral 7B Instruct v0.3 (Apache 2.0 Open Access).'
-  };
-
-  const modelLLoRA: ModelEvalResult = result?.models?.llora_7b || {
-    name: 'Arindamdas70/llora7B-finetuned',
-    assigned_marks: result?.consensus.assigned_marks || 0,
-    rubric_score: result?.consensus.rubric_overall_score || 0,
-    rubric_breakdown: result?.consensus.rubric_breakdown || { conceptual_accuracy: 0, completeness: 0, clarity: 0, terminology: 0 },
-    feedback: 'Evaluated using LLoRA 7B Fine-Tuned academic evaluator.'
-  };
-
-  const allModelResults = [
-    { spec: JURY_MODEL_SPECS[0], data: modelQwen },
-    { spec: JURY_MODEL_SPECS[1], data: modelPhi },
-    { spec: JURY_MODEL_SPECS[2], data: modelMistral },
-    { spec: JURY_MODEL_SPECS[3], data: modelLLoRA },
-  ];
+  const juryMode = result?.jury?.mode;
+  const juryLabel =
+    juryMode === 'multi-model'
+      ? `${result?.jury?.responded}-Model Consensus`
+      : juryMode === 'single-model'
+        ? 'Single-Model Opinion'
+        : juryMode === 'heuristic'
+          ? 'Heuristic Estimate'
+          : 'Consensus Result';
 
   return (
     <div className="space-y-6">
       {/* Top Page Header */}
       <PageHeader
-        title="Dual & Multi-LLM Academic Evaluator"
-        description="Multi-model consensus scoring & rubric evaluation powered concurrently by 4 open-access academic LLMs."
+        title="Dual-LLM Academic Evaluator"
+        description="Two independent language models score each answer against your marking scheme; you see both opinions, their agreement, and decide the final mark."
         actions={
           <Button
             type="button"
@@ -377,103 +360,68 @@ export const DualLlmEvaluator: React.FC = () => {
             className="gap-1.5 cursor-pointer"
           >
             <Info className="h-4 w-4 text-primary" />
-            <span>{showJuryInfo ? 'Hide Jury Specs' : 'View Jury Model Specifications'}</span>
+            <span>{showJuryInfo ? 'Hide how it works' : 'How it works'}</span>
             {showJuryInfo ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </Button>
         }
       />
 
-      {/* AI Jury Showcase Banner */}
+      {/* How-it-works banner */}
       <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-primary-50/40 dark:to-primary-950/20 p-5 md:p-6 shadow-card">
         <BrainCircuit className="absolute -right-8 -bottom-8 w-52 h-52 text-primary/5 dark:text-primary/10 pointer-events-none" />
 
         <div className="relative z-10 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Badge variant="outline" className="gap-1.5 border-primary/20 bg-primary/5 text-primary">
-              <ShieldCheck className="h-3.5 w-3.5" /> Open-Access LLM Academic Jury System
+              <ShieldCheck className="h-3.5 w-3.5" /> Independent cross-check, faculty decides
             </Badge>
             <span className="text-xs text-muted-foreground font-medium">
-              4 Concurrently Queried Open Models
+              Jurors are queried in parallel
             </span>
           </div>
 
           <p className="text-xs sm:text-small text-muted-foreground max-w-3xl leading-relaxed">
-            Every submission is independently evaluated by 4 distinct open-access language models. 
-            Consensus scores, criterion variances, and comprehensive rubric justifications are calculated in parallel.
+            Each answer is scored on four rubric criteria by two models from different vendors. Their marks are
+            averaged into a consensus, and any disagreement above 15% of the available marks is flagged for review.
+            If only one model responds you see a single opinion; if none do, a clearly labelled word-overlap
+            estimate is shown instead of a grade.
           </p>
 
-          {/* 4 Models Highlight Badges Grid */}
+          {/* Rubric criteria the jurors score */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
-            {JURY_MODEL_SPECS.map((spec) => {
-              const IconComponent = spec.icon;
-              return (
-                <div 
-                  key={spec.id}
-                  className={cn(
-                    "rounded-xl border border-border bg-background/70 backdrop-blur p-3.5 transition-all hover:border-primary/40 hover:shadow-sm space-y-2",
-                    "dark:bg-card/70"
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border", spec.badgeColor)}>
-                      {spec.badge}
-                    </span>
-                    <IconComponent className={cn("w-4 h-4", spec.textColor)} />
-                  </div>
-                  <div className="font-semibold text-xs text-foreground truncate" title={spec.name}>
-                    {spec.shortName}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground line-clamp-2 leading-tight">
-                    {spec.description}
-                  </div>
-                  <div className="text-[10px] font-mono text-muted-foreground/80 pt-1 border-t border-border/60">
-                    {spec.params}
-                  </div>
+            {[
+              { label: 'Conceptual accuracy', weight: '40%', text: 'Are the core ideas correct?', icon: BrainCircuit },
+              { label: 'Completeness', weight: '30%', text: 'How much of the reference is covered?', icon: Layers },
+              { label: 'Clarity & structure', weight: '15%', text: 'Is the answer organised and unambiguous?', icon: Sparkles },
+              { label: 'Terminology', weight: '15%', text: 'Is domain vocabulary used precisely?', icon: Cpu },
+            ].map((c) => (
+              <div
+                key={c.label}
+                className="rounded-xl border border-border bg-background/70 backdrop-blur p-3.5 space-y-1.5 dark:bg-card/70"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-primary/30 bg-primary/5 text-primary">
+                    Weight {c.weight}
+                  </span>
+                  <c.icon className="w-4 h-4 text-primary" />
                 </div>
-              );
-            })}
+                <div className="font-semibold text-xs text-foreground">{c.label}</div>
+                <div className="text-[11px] text-muted-foreground leading-tight">{c.text}</div>
+              </div>
+            ))}
           </div>
 
-          {/* Collapsible Jury Info Panel */}
           {showJuryInfo && (
             <div className="mt-4 p-4 md:p-5 rounded-xl bg-muted/40 border border-border text-xs space-y-3 animate-in fade-in duration-200">
               <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
-                <Scale className="w-4 h-4 text-primary" /> Open Model Jury Specifications & Licensing
+                <Scale className="w-4 h-4 text-primary" /> How the consensus is formed
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-muted-foreground">
-                <div className="p-3 rounded-lg bg-card border border-border space-y-1">
-                  <div className="font-semibold text-cyan-600 dark:text-cyan-400 flex items-center gap-1.5">
-                    <BrainCircuit className="w-3.5 h-3.5" /> Qwen/Qwen2.5-7B-Instruct
-                  </div>
-                  <p className="text-[11px] leading-relaxed">
-                    Zero gated token requirement. Top-ranked open weights model for structured JSON adherence and multi-criteria academic rubric evaluation.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-card border border-border space-y-1">
-                  <div className="font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                    <GraduationCap className="w-3.5 h-3.5" /> microsoft/Phi-3.5-mini-instruct
-                  </div>
-                  <p className="text-[11px] leading-relaxed">
-                    Open MIT license. 3.8B parameter lightweight model optimized for step-by-step logical reasoning and technical argument parsing.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-card border border-border space-y-1">
-                  <div className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5" /> mistralai/Mistral-7B-Instruct-v0.3
-                  </div>
-                  <p className="text-[11px] leading-relaxed">
-                    Apache 2.0 open access license. Renowned for high precision context understanding, rapid inference, and low hallucination rate.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-card border border-border space-y-1">
-                  <div className="font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5" /> Arindamdas70/llora7B-finetuned
-                  </div>
-                  <p className="text-[11px] leading-relaxed">
-                    Domain fine-tuned academic grader LoRA adapter trained specifically on university exam answer keys and marking rubrics.
-                  </p>
-                </div>
-              </div>
+              <ol className="list-decimal space-y-1.5 pl-5 text-muted-foreground leading-relaxed">
+                <li>The question, your reference answer and the student answer are sent to two models configured on the server (primary and secondary vendor).</li>
+                <li>Each returns 0–10 scores per criterion plus written feedback. Marks are derived from the weighted rubric, never taken on trust from the model.</li>
+                <li>The consensus is the mean of the responding jurors. If they differ by more than 15% of the max marks, the result is flagged <strong className="text-foreground">Faculty review required</strong>.</li>
+                <li>Every juror that actually answered is listed below with its own rationale, so you can see <em>why</em> they agree or disagree.</li>
+              </ol>
             </div>
           )}
         </div>
@@ -785,12 +733,12 @@ export const DualLlmEvaluator: React.FC = () => {
                 {loading ? (
                   <>
                     <RotateCcw className="h-4 w-4 animate-spin" />
-                    <span>Evaluating with 4 LLM Jury...</span>
+                    <span>Asking both jurors…</span>
                   </>
                 ) : (
                   <>
                     <Send className="h-4 w-4" />
-                    <span>Run 4-Model Open LLM Jury Evaluation</span>
+                    <span>Run dual-model evaluation</span>
                   </>
                 )}
               </Button>
@@ -817,8 +765,18 @@ export const DualLlmEvaluator: React.FC = () => {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4 text-primary" /> 4-Model Open Jury Consensus Result
+                      <ShieldCheck className="w-4 h-4 text-primary" /> {juryLabel}
                     </span>
+                    {juryMode === 'heuristic' && (
+                      <Badge variant="error" className="gap-1">
+                        <AlertTriangle className="w-3 h-3" /> No AI juror responded — not a grade
+                      </Badge>
+                    )}
+                    {juryMode === 'single-model' && (
+                      <Badge variant="warning" className="gap-1">
+                        <AlertTriangle className="w-3 h-3" /> One juror only — no cross-check
+                      </Badge>
+                    )}
                     {(referenceFile || result.reference_answer) && (
                       <span className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full bg-muted border border-border text-muted-foreground">
                         <FileText className="w-3 h-3 text-success" />
@@ -832,18 +790,20 @@ export const DualLlmEvaluator: React.FC = () => {
                       </span>
                     )}
                     {result.consensus.has_high_discrepancy ? (
-                      <Badge variant="warning" className="gap-1">
-                        <AlertTriangle className="w-3 h-3" /> Jury Discrepancy ({result.consensus.variance_percentage}%)
-                      </Badge>
+                      juryMode === 'multi-model' && (
+                        <Badge variant="warning" className="gap-1">
+                          <AlertTriangle className="w-3 h-3" /> Jurors disagree by {result.consensus.variance_percentage}%
+                        </Badge>
+                      )
                     ) : (
                       <Badge variant="success" className="gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> High Jury Consensus ({result.consensus.jury_confidence || 95}% Confidence)
+                        <CheckCircle2 className="w-3 h-3" /> Jurors agree (Δ {result.consensus.variance_percentage}%)
                       </Badge>
                     )}
                   </div>
 
                   <div className="text-2xl md:text-3xl font-extrabold text-foreground flex items-center gap-2.5 tracking-tight">
-                    <Award className="w-7 h-7 text-amber-500" />
+                    <Award className="w-7 h-7 text-warning" />
                     Assigned Mark:{' '}
                     <span className="text-primary font-black">
                       {overrideMarks ?? result.consensus.assigned_marks}
@@ -874,7 +834,7 @@ export const DualLlmEvaluator: React.FC = () => {
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <h3 className="text-xs font-bold uppercase text-muted-foreground tracking-wider flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-primary" /> Criterion Rubric Breakdown (Mean Jury Score)
+                    <BarChart3 className="w-4 h-4 text-primary" /> Criterion Rubric Breakdown (mean of responding jurors)
                   </h3>
 
                   {/* View mode toggle: Cards vs Matrix */}
@@ -910,10 +870,10 @@ export const DualLlmEvaluator: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[
-                    { label: 'Conceptual Accuracy (40%)', score: result.consensus.rubric_breakdown.conceptual_accuracy, color: 'bg-cyan-500' },
-                    { label: 'Completeness & Depth (30%)', score: result.consensus.rubric_breakdown.completeness, color: 'bg-amber-500' },
-                    { label: 'Clarity & Structure (15%)', score: result.consensus.rubric_breakdown.clarity, color: 'bg-emerald-500' },
-                    { label: 'Academic Terminology (15%)', score: result.consensus.rubric_breakdown.terminology, color: 'bg-purple-500' },
+                    { label: 'Conceptual Accuracy (40%)', score: result.consensus.rubric_breakdown.conceptual_accuracy, color: 'bg-primary-700' },
+                    { label: 'Completeness & Depth (30%)', score: result.consensus.rubric_breakdown.completeness, color: 'bg-primary-600' },
+                    { label: 'Clarity & Structure (15%)', score: result.consensus.rubric_breakdown.clarity, color: 'bg-primary-500' },
+                    { label: 'Academic Terminology (15%)', score: result.consensus.rubric_breakdown.terminology, color: 'bg-primary-400' },
                   ].map((item, idx) => (
                     <div key={idx} className="bg-muted/40 border border-border rounded-xl p-3.5 space-y-2">
                       <div className="flex justify-between text-xs font-semibold">
@@ -935,7 +895,7 @@ export const DualLlmEvaluator: React.FC = () => {
               <div className="p-4 rounded-xl bg-primary-50/50 dark:bg-primary-950/20 border border-primary-200 dark:border-primary-900/40 text-xs sm:text-small text-foreground flex items-start gap-3">
                 <Lightbulb className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
                 <div className="leading-relaxed">
-                  <span className="font-semibold text-primary">Jury Recommendation: </span>
+                  <span className="font-semibold text-primary">Recommendation: </span>
                   {result.consensus.recommendation}
                 </div>
               </div>
@@ -944,8 +904,12 @@ export const DualLlmEvaluator: React.FC = () => {
 
           {/* Model Display View: Cards vs Matrix */}
           {activeTab === 'cards' ? (
-            /* 4-Model Open Jury Grid */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div
+              className={cn(
+                "grid grid-cols-1 gap-5",
+                allModelResults.length >= 3 ? "md:grid-cols-2 lg:grid-cols-3" : allModelResults.length === 2 ? "md:grid-cols-2" : "md:max-w-xl"
+              )}
+            >
               {allModelResults.map(({ spec, data }) => {
                 const IconComp = spec.icon;
                 return (
@@ -1032,15 +996,15 @@ export const DualLlmEvaluator: React.FC = () => {
                   Detailed Model Score Matrix
                 </CardTitle>
                 <CardDescription>
-                  Cross-model breakdown of scores and rubric weights across all 4 jury participants.
+                  Per-juror scores and rubric breakdown for every model that responded.
                 </CardDescription>
               </CardHeader>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="border-y border-border bg-muted/40 text-muted-foreground uppercase text-[10px] tracking-wider">
-                      <th className="py-3 px-4">Jury Model</th>
-                      <th className="py-3 px-4">License / Access</th>
+                      <th className="py-3 px-4">Juror</th>
+                      <th className="py-3 px-4">Provider</th>
                       <th className="py-3 px-4">Assigned Marks</th>
                       <th className="py-3 px-4">Rubric (0-10)</th>
                       <th className="py-3 px-4">Conceptual</th>

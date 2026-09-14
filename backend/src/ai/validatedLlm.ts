@@ -20,12 +20,13 @@ export async function callValidatedLlmJson<T>(
   systemPrompt: string,
   userPrompt: string,
   schema: z.ZodType<T>,
-  pipeline: string
+  pipeline: string,
+  options: { model?: string } = {}
 ): Promise<T> {
   let recoveryPrompt = userPrompt;
 
   for (let attempt = 1; attempt <= MAX_VALIDATION_ATTEMPTS; attempt += 1) {
-    const raw = await callLlmJson<unknown>(systemPrompt, recoveryPrompt);
+    const raw = await callLlmJson<unknown>(systemPrompt, recoveryPrompt, options);
     const parsed = schema.safeParse(raw);
     if (parsed.success) return parsed.data;
 

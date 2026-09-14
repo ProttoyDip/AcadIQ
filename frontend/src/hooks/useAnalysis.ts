@@ -60,3 +60,12 @@ export function useMapCourseOutcomes() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: reportKeys.all }),
   });
 }
+
+export function useAnalyzeFull() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ courseId, questionPaperId }: { courseId: number; questionPaperId: number }) =>
+      analysisService.analyzeFull(courseId, questionPaperId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: reportKeys.all }),
+  });
+}

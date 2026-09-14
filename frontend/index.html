@@ -3,7 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="AcadIQ scores exam paper quality, audits syllabus coverage, detects repeated questions and maps course outcomes, with the evidence attached to every finding."
+    />
+    <meta name="theme-color" content="#fbfaf5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e1512" media="(prefers-color-scheme: dark)" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
     <title>AcadIQ — AI Academic Intelligence Platform</title>
+
+    <script>
+      // Apply the stored theme before first paint so a dark-mode user never
+      // sees a flash of the off-white canvas. Mirrors ThemeContext's storage key.
+      (function () {
+        try {
+          var saved = localStorage.getItem("acadiq-theme");
+          var dark =
+            saved === "dark" ||
+            ((saved === "system" || !saved) &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+        } catch (e) {
+          /* private mode or blocked storage — fall through to light */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

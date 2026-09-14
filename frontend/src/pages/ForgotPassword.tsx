@@ -11,12 +11,14 @@ import { Label } from "../components/ui/label";
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
+  const [devResetUrl, setDevResetUrl] = useState<string | null>(null);
   const forgotPassword = useForgotPassword();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     try {
-      await forgotPassword.mutateAsync({ email });
+      const result = await forgotPassword.mutateAsync({ email });
+      setDevResetUrl(result.devResetUrl ?? null);
       setIsSuccess(true);
     } catch {
       // Error message handled via forgotPassword.error
@@ -40,15 +42,27 @@ export default function ForgotPassword() {
           <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-success/10 text-success mb-3">
             <CheckCircle2 className="h-6 w-6" />
           </div>
-          <h3 className="font-semibold text-foreground text-sm">Check your inbox</h3>
+          <h3 className="font-semibold text-foreground text-sm">{devResetUrl ? "Reset link ready" : "Check your inbox"}</h3>
           <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-            If an account exists for <span className="font-medium text-foreground">{email}</span>, we've sent a password reset link. Please check your inbox and spam folder.
+            {devResetUrl ? (
+              <>Email delivery isn't configured on this server, so the reset link for <span className="font-medium text-foreground">{email}</span> is shown here instead (development only).</>
+            ) : (
+              <>If an account exists for <span className="font-medium text-foreground">{email}</span>, we've sent a password reset link. Please check your inbox and spam folder.</>
+            )}
           </p>
+          {devResetUrl && (
+            <a
+              href={devResetUrl}
+              className="mt-4 block truncate rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-xs font-medium text-warning hover:underline"
+            >
+              {devResetUrl}
+            </a>
+          )}
           <div className="mt-6 flex flex-col gap-2">
             <Button variant="outline" onClick={() => setIsSuccess(false)} className="w-full text-xs">
               Try another email
             </Button>
-            <Link to="/login" className="text-xs font-medium text-primary-700 hover:underline text-center">
+            <Link to="/login" className="text-xs font-medium text-primary hover:underline text-center">
               Return to Login
             </Link>
           </div>
@@ -80,7 +94,7 @@ export default function ForgotPassword() {
 
           <p className="text-center text-small text-muted-foreground">
             Remembered your password?{" "}
-            <Link to="/login" className="font-medium text-primary-700 hover:underline">
+            <Link to="/login" className="font-medium text-primary hover:underline">
               Sign in
             </Link>
           </p>

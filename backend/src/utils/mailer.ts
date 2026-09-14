@@ -15,6 +15,9 @@ export const transporter = nodemailer.createTransport({
   auth: user && pass ? { user, pass } : undefined,
 });
 
+/** True when credentials exist; without them Gmail and most relays reject the send outright. */
+export const isMailerConfigured = Boolean(user && pass);
+
 export async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<void> {
   const htmlContent = `
     <!DOCTYPE html>

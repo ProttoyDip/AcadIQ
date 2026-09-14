@@ -6,6 +6,8 @@ const { buildCopilotSystemPrompt } = require("../dist/services/copilot/prompt.se
 const { extractDocumentText, extractDocxText, extractPdfText } = require("../dist/ai/documentTextExtractor");
 const { callLlmChat } = require("../dist/ai/llmClient");
 
+const hasLlmKey = Boolean(process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY);
+
 test("Copilot prompt incorporates course context, questions, and report metrics", () => {
   const prompt = buildCopilotSystemPrompt({
     courseCode: "CSE301",
@@ -65,14 +67,18 @@ test("documentTextExtractor rejects files without valid PDF or DOCX binary signa
   }
 });
 
-test("Groq API copilot chat returns ultra-fast conversational response", async () => {
-  const reply = await callLlmChat([
-    { role: "system", content: "You are AcadIQ Copilot. Answer in one brief sentence." },
-    { role: "user", content: "What is Bloom's Taxonomy?" },
-  ]);
+test(
+  "LLM provider copilot chat returns a conversational response",
+  { skip: hasLlmKey ? false : "GROQ_API_KEY / OPENAI_API_KEY not set — live provider test skipped" },
+  async () => {
+    const reply = await callLlmChat([
+      { role: "system", content: "You are AcadIQ Copilot. Answer in one brief sentence." },
+      { role: "user", content: "What is Bloom's Taxonomy?" },
+    ]);
 
-  assert.ok(typeof reply === "string");
-  assert.ok(reply.length > 5);
-  assert.ok(/bloom|taxonomy|cognitive|learning|framework/i.test(reply));
-});
+    assert.ok(typeof reply === "string");
+    assert.ok(reply.length > 5);
+    assert.ok(/bloom|taxonomy|cognitive|learning|framework/i.test(reply));
+  }
+);
 

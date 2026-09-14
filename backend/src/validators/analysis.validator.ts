@@ -28,6 +28,8 @@ export const questionReviewSchema = analyzeExamSchema.extend({
 
 export const coMappingSchema = analyzeExamSchema;
 
+export const fullAnalysisSchema = analyzeSyllabusSchema;
+
 export const dualEvaluationSchema = z.object({
   question: z.string().trim().min(3).max(10_000),
   maxMarks: z.coerce.number().positive().max(1_000).default(10),
@@ -64,5 +66,6 @@ export type AnalyzeSyllabusInput = z.infer<typeof analyzeSyllabusSchema>;
 export type AnalyzeSimilarityInput = z.infer<typeof analyzeSimilaritySchema>;
 export type QuestionReviewInput = z.infer<typeof questionReviewSchema>;
 export type CoMappingInput = z.infer<typeof coMappingSchema>;
+export type FullAnalysisInput = z.infer<typeof fullAnalysisSchema>;
 export type MemoryCheckInput = z.infer<typeof memoryCheckSchema>;
 export type DualEvaluationInput = z.infer<typeof dualEvaluationSchema>;

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   BookOpenCheck,
@@ -10,9 +10,12 @@ import {
   History,
   Gauge,
   ListChecks,
+  Download,
+  Loader2,
 } from "lucide-react";
 import { useReport, useReports } from "../hooks/useReports";
 import { useCourse } from "../hooks/useCourses";
+import { reportService } from "../services/reportService";
 import CopilotPanel from "../components/copilot/CopilotPanel";
 import PageHeader from "../components/layout/PageHeader";
 import { LoadingState } from "../components/ui/loading-state";
@@ -47,12 +50,15 @@ import {
   QuestionReviewResult,
   Course,
   AIExplanation,
+  AnalysisReport as AnalysisReportRecord,
 } from "../types";
 
 interface ResolvedQuestion {
   text: string;
   paperLabel: string;
 }
+
+const REPORT_ORDER = ["EXAM_QUALITY", "SYLLABUS_COVERAGE", "QUESTION_REVIEW", "CO_MAPPING", "QUESTION_SIMILARITY"];
 
 function buildQuestionLookup(course?: Course): Map<number, ResolvedQuestion> {
   const map = new Map<number, ResolvedQuestion>();
@@ -85,6 +91,27 @@ export default function AnalysisReport() {
   const { data: report, isLoading, isError } = useReport(id ? Number(id) : null);
   const { data: allReports } = useReports();
   const { data: course } = useCourse(report?.courseId ?? null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  async function downloadPdf() {
+    if (!report) return;
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      const { blob, filename } = await reportService.downloadPdf(report.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setDownloadError("The PDF could not be generated. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   // Cross-references to the other AI analyses for the same course, so the
   // exam report reads as one complete assessment instead of sending faculty
@@ -105,6 +132,21 @@ export default function AnalysisReport() {
 
   const questionLookup = useMemo(() => buildQuestionLookup(course), [course]);
 
+  // Latest report of each type for the same paper: lets faculty flip between
+  // the analyses the full audit produced without leaving the page.
+  const siblingReports = useMemo(() => {
+    if (!report?.questionPaperId) return [];
+    const latestByType = new Map<string, AnalysisReportRecord>();
+    for (const r of allReports ?? []) {
+      if (r.questionPaperId !== report.questionPaperId) continue;
+      const existing = latestByType.get(r.reportType);
+      if (!existing || new Date(r.createdAt) > new Date(existing.createdAt) || r.id === report.id) {
+        latestByType.set(r.reportType, r);
+      }
+    }
+    return Array.from(latestByType.values()).sort((a, b) => REPORT_ORDER.indexOf(a.reportType) - REPORT_ORDER.indexOf(b.reportType));
+  }, [allReports, report?.questionPaperId, report?.id]);
+
   if (isLoading) return <LoadingState label="Loading report..." />;
 
   if (isError || !report) {
@@ -123,13 +165,46 @@ export default function AnalysisReport() {
       : reportTypeLabel(report.reportType);
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_460px] lg:items-start">
       <div className="flex flex-col gap-6">
         <PageHeader
           title={reportTypeLabel(report.reportType)}
           description={`Generated ${formatDateTime(report.createdAt)}`}
-          actions={<Badge variant="outline">Report #{report.id}</Badge>}
+          actions={
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">Report #{report.id}</Badge>
+              <Button variant="outline" size="sm" onClick={downloadPdf} disabled={downloading} className="gap-1.5">
+                {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                {downloading ? "Preparing PDF…" : "Download PDF"}
+              </Button>
+            </div>
+          }
         />
+        {downloadError && (
+          <p role="alert" className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-small text-error">{downloadError}</p>
+        )}
+
+        {siblingReports.length > 1 && (
+          <nav aria-label="Analyses of this paper" className="flex flex-wrap gap-2 rounded-lg border border-border bg-muted/40 p-1.5">
+            {siblingReports.map((r) => {
+              const active = r.id === report.id;
+              return (
+                <Link
+                  key={r.id}
+                  to={`/reports/${r.id}`}
+                  aria-current={active ? "page" : undefined}
+                  className={
+                    active
+                      ? "rounded-md bg-card px-3 py-1.5 text-small font-semibold text-foreground shadow-xs ring-1 ring-border"
+                      : "rounded-md px-3 py-1.5 text-small font-medium text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+                  }
+                >
+                  {reportTypeLabel(r.reportType)}
+                </Link>
+              );
+            })}
+          </nav>
+        )}
 
         {report.reportType === "EXAM_QUALITY" && (
           <ExamQualityReport
@@ -154,7 +229,7 @@ export default function AnalysisReport() {
       </div>
 
       {report.courseId && (
-        <div className="lg:sticky lg:top-6 lg:h-[calc(100vh-8rem)]">
+        <div className="min-h-[560px] lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)]">
           <CopilotPanel
             courseId={report.courseId}
             examId={report.questionPaperId ?? undefined}
@@ -322,8 +397,8 @@ function ExamQualityReport({
             </div>
           ) : (
             <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border bg-muted/40 px-6 py-10 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50">
-                <History className="h-6 w-6 text-primary-700" strokeWidth={1.75} />
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50 dark:bg-primary-950/70">
+                <History className="h-6 w-6 text-primary" strokeWidth={1.75} />
               </div>
               <div className="max-w-sm">
                 <p className="text-body font-semibold text-foreground">No academic memory check run for this course yet</p>

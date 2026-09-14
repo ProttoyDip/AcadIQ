@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { cn } from "../../lib/utils";
+import { useChartTheme, scoreTone } from "../../lib/chartTheme";
 
 interface ScoreHeroProps {
   score: number;
@@ -15,12 +16,13 @@ function scoreLabel(score: number) {
 }
 
 export default function ScoreHero({ score, title, subtitle }: ScoreHeroProps) {
+  const chart = useChartTheme();
   const circumference = 2 * Math.PI * 54;
   const offset = circumference - (score / 100) * circumference;
-  const tone = score >= 75 ? "#1a7f4b" : score >= 50 ? "#b7791f" : "#c22a2a";
+  const tone = scoreTone(chart, score);
 
   return (
-    <div className="flex flex-col items-center gap-6 rounded-lg border border-border bg-card p-8 shadow-card sm:flex-row sm:justify-between">
+    <div className="flex flex-col items-center gap-6 rounded-xl border border-border bg-card p-6 shadow-card sm:flex-row sm:justify-between sm:p-8">
       <div>
         <p className="text-small font-medium uppercase tracking-wide text-muted-foreground">{subtitle}</p>
         <h2 className="mt-1 text-heading font-bold tracking-tight text-foreground">{title}</h2>
@@ -52,7 +54,7 @@ export default function ScoreHero({ score, title, subtitle }: ScoreHeroProps) {
           />
         </svg>
         <div className={cn("absolute flex flex-col items-center")}>
-          <span className="text-heading font-bold text-foreground">{Math.round(score)}</span>
+          <span className="tnum text-heading font-bold text-foreground">{Math.round(score)}</span>
           <span className="text-xs text-muted-foreground">out of 100</span>
         </div>
       </motion.div>

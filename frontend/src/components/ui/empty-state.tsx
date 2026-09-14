@@ -15,12 +15,12 @@ export function EmptyState({ icon: Icon, title, description, actionLabel, onActi
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-muted/40 px-6 py-14 text-center",
+        "flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-muted/40 px-6 py-14 text-center",
         className
       )}
     >
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50">
-        <Icon className="h-6 w-6 text-primary-700" strokeWidth={1.75} />
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50 text-primary-700 dark:bg-primary-950/60 dark:text-primary-300">
+        <Icon className="h-6 w-6" strokeWidth={1.75} aria-hidden="true" />
       </div>
       <div className="max-w-sm">
         <p className="text-body font-semibold text-foreground">{title}</p>

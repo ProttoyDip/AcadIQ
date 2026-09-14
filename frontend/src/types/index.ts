@@ -163,6 +163,27 @@ export type ReportType =
   | "QUESTION_REVIEW"
   | "CO_MAPPING";
 
+export type FullAnalysisKey = "examQuality" | "syllabusCoverage" | "questionReview" | "coMapping" | "similarity";
+
+export interface FullAnalysisStep {
+  key: FullAnalysisKey;
+  label: string;
+  status: "completed" | "failed" | "skipped";
+  reportId?: number;
+  error?: string;
+  note?: string;
+}
+
+export interface FullAnalysisResult {
+  courseId: number;
+  questionPaperId: number;
+  comparedAgainstPaperId: number | null;
+  primaryReportId: number | null;
+  completed: number;
+  failed: number;
+  steps: FullAnalysisStep[];
+}
+
 export interface CopilotChatResponse {
   sessionId: number;
   title: string;

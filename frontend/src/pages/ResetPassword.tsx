@@ -115,7 +115,7 @@ export default function ResetPassword() {
 
           <p className="text-center text-small text-muted-foreground">
             Remembered your password?{" "}
-            <Link to="/login" className="font-medium text-primary-700 hover:underline">
+            <Link to="/login" className="font-medium text-primary hover:underline">
               Sign in
             </Link>
           </p>
