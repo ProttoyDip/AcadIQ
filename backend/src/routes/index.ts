@@ -10,6 +10,7 @@ import coRoutes from "./co.routes";
 import adminRoutes from "./admin.routes";
 import copilotRoutes from "./copilot.routes";
 import feedbackRoutes from "./feedback.routes";
+import aiRoutes from "./ai.routes";
 
 const router = Router();
 
@@ -25,5 +26,6 @@ router.use("/co", coRoutes);
 router.use("/admin", adminRoutes);
 router.use("/copilot", copilotRoutes);
 router.use("/feedback", feedbackRoutes);
+router.use("/ai", aiRoutes);
 
 export default router;

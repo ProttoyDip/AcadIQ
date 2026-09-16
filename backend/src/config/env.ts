@@ -76,4 +76,11 @@ export const env = {
     cacheTtlDays: positiveInteger("LLM_CACHE_TTL_DAYS", 30),
     traceRetentionDays: positiveInteger("TRACE_RETENTION_DAYS", 90),
   },
+  ollama: {
+    baseUrl: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434",
+    textModel: process.env.OLLAMA_TEXT_MODEL ?? "gemma3:4b",
+    visionModel: process.env.OLLAMA_VISION_MODEL ?? "qwen2.5vl:3b",
+    embeddingModel: process.env.OLLAMA_EMBEDDING_MODEL ?? "nomic-embed-text",
+    timeoutMs: positiveInteger("OLLAMA_TIMEOUT_MS", 120_000),
+  },
 };
