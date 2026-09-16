@@ -45,6 +45,7 @@ export const env = {
     process.env.OPENAI_BASE_URL ??
     (isGroq ? "https://api.groq.com/openai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions"),
   openAiModel: process.env.OPENAI_MODEL ?? (isGroq ? "llama-3.3-70b-versatile" : "gpt-4o-mini"),
+  dualEvalSecondaryModel: process.env.DUAL_EVAL_SECONDARY_MODEL ?? (isGroq ? "llama-3.1-8b-instant" : "gpt-4o"),
   aiTimeoutMs: positiveInteger("AI_TIMEOUT_MS", 45_000),
   maxAiInputChars: positiveInteger("MAX_AI_INPUT_CHARS", 80_000),
   /** Syllabus text is truncated to this many characters before entering any prompt (Groq free tier: ~8k tokens/request). */
