@@ -27,9 +27,10 @@ import {
   X,
   LayoutGrid,
   TableProperties,
-  Unlock
+  Unlock,
+  Copy
 } from 'lucide-react';
-import { api } from '../services/api';
+import { api, apiErrorMessage } from '../services/api';
 import PageHeader from './layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
@@ -81,57 +82,132 @@ interface MultiLlmEvaluationResponse {
   privacy?: { pii_redactions: Record<string, number> };
 }
 
-/** Visual palette cycled across whichever jurors respond; nothing here names a specific model. */
-const JUROR_STYLES = [
+interface ModelVisualSpec {
+  id: string;
+  name: string;
+  shortName: string;
+  badge: string;
+  badgeColor: string;
+  borderColor: string;
+  textColor: string;
+  dotColor: string;
+  icon: React.ComponentType<{ className?: string }>;
+  params?: string;
+}
+
+const PALETTES = [
   {
-    id: 'qwen_2_5',
-    name: 'Qwen/Qwen2.5-7B-Instruct',
-    shortName: 'Qwen 2.5 7B',
-    badge: '70/30 Fine-Tuned',
     badgeColor: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/30',
     borderColor: 'border-cyan-500/30 hover:border-cyan-500/60',
     textColor: 'text-cyan-600 dark:text-cyan-400',
+    dotColor: 'bg-cyan-500',
     icon: BrainCircuit,
-    description: 'Fine-tuned on BeSTRaP & OS datasets (70% train / 30% val). Zero gated token requirement.',
-    accessType: 'Ungated / Free Access',
-    params: '7.2B Parameters'
   },
   {
     badgeColor: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30',
     borderColor: 'border-amber-500/30 hover:border-amber-500/60',
-    textColor: 'text-amber-700 dark:text-amber-300',
+    textColor: 'text-amber-600 dark:text-amber-400',
+    dotColor: 'bg-amber-500',
     icon: Sparkles,
   },
   {
     badgeColor: 'bg-primary-500/10 text-primary-700 dark:text-primary-300 border-primary-500/30',
     borderColor: 'border-primary-500/30 hover:border-primary-500/60',
-    textColor: 'text-primary-700 dark:text-primary-300',
+    textColor: 'text-primary-600 dark:text-primary-400',
+    dotColor: 'bg-primary-500',
     icon: Cpu,
   },
   {
-    id: 'llora_7b',
-    name: 'Arindamdas70/llora7B-finetuned',
-    shortName: 'LLoRA 7B Fine-Tuned',
-    badge: 'BeSTRaP + OS LoRA',
     badgeColor: 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/30',
     borderColor: 'border-purple-500/30 hover:border-purple-500/60',
     textColor: 'text-purple-600 dark:text-purple-400',
+    dotColor: 'bg-purple-500',
     icon: Layers,
-    description: 'LoRA adapter fine-tuned on 70% BeSTRaP DBMS and CityU HK OS datasets with 30% holdout validation.',
-    accessType: 'Fine-Tuned Adapter',
-    params: '7B LoRA Adapter'
-  }
+  },
+  {
+    badgeColor: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
+    borderColor: 'border-emerald-500/30 hover:border-emerald-500/60',
+    textColor: 'text-emerald-600 dark:text-emerald-400',
+    dotColor: 'bg-emerald-500',
+    icon: ShieldCheck,
+  },
 ];
 
-const HEURISTIC_STYLE = {
+const HEURISTIC_PALETTE = {
   badgeColor: 'bg-muted text-muted-foreground border-border',
   borderColor: 'border-dashed border-border',
   textColor: 'text-muted-foreground',
+  dotColor: 'bg-muted-foreground',
   icon: Scale,
 };
 
-function shortModelName(id: string): string {
-  return id.includes('/') ? id.split('/').slice(1).join('/') : id;
+function resolveModelSpec(id: string, data: ModelEvalResult, index: number): ModelVisualSpec {
+  const isHeuristic = data.kind === 'heuristic' || id.includes('heuristic');
+  const palette = isHeuristic ? HEURISTIC_PALETTE : PALETTES[index % PALETTES.length];
+
+  const name = data.name || id;
+  const lower = (name + ' ' + id).toLowerCase();
+
+  let shortName = name.includes('/') ? name.split('/').slice(1).join('/') : name;
+  let badge = data.provider || (isHeuristic ? 'Offline Heuristic' : 'LLM Juror');
+  let params = isHeuristic ? 'Word-overlap / Domain Logic' : name;
+
+  if (isHeuristic) {
+    if (lower.includes('domain') || lower.includes('bestrap') || lower.includes('os')) {
+      shortName = 'Domain Rubric Heuristic';
+      badge = 'BeSTRaP / OS Domain Rule';
+      params = 'CSE301 / CSE302 Domain Model';
+    } else {
+      shortName = 'Lexical Overlap Heuristic';
+      badge = 'Offline Lexical Rule';
+      params = 'Reference Scheme Keyword Overlap';
+    }
+  } else if (lower.includes('qwen2.5') || lower.includes('qwen-2.5') || lower.includes('qwen_2_5')) {
+    shortName = 'Qwen 2.5 7B Instruct';
+    badge = '70/30 Fine-Tuned';
+    params = '7.2B Parameters • Free Access';
+  } else if (lower.includes('phi-3.5') || lower.includes('phi_3_5')) {
+    shortName = 'Phi-3.5 Mini';
+    badge = 'Open MIT License';
+    params = '3.8B Parameters • Reasoning Tuned';
+  } else if (lower.includes('mistral-7b') || lower.includes('mistral_7b')) {
+    shortName = 'Mistral 7B v0.3';
+    badge = 'Apache 2.0 Open';
+    params = '7.3B Parameters • Instruction Model';
+  } else if (lower.includes('llora')) {
+    shortName = 'LLoRA 7B Fine-Tuned';
+    badge = 'BeSTRaP + OS LoRA';
+    params = '7B LoRA Adapter • Academic Grader';
+  } else if (lower.includes('llama-3.3-70b') || lower.includes('llama_3_3_70b')) {
+    shortName = 'Llama 3.3 70B';
+    badge = data.provider || 'Meta (via Groq)';
+    params = '70B Parameters • High Reasoning';
+  } else if (lower.includes('llama-3.1-8b') || lower.includes('llama_3_1_8b')) {
+    shortName = 'Llama 3.1 8B';
+    badge = data.provider || 'Meta (via Groq)';
+    params = '8B Parameters • Fast Juror';
+  } else if (lower.includes('gpt-4o-mini')) {
+    shortName = 'GPT-4o Mini';
+    badge = 'OpenAI';
+    params = 'Fast Multimodal Juror';
+  } else if (lower.includes('gpt-4o')) {
+    shortName = 'GPT-4o';
+    badge = 'OpenAI';
+    params = 'Flagship Omni Juror';
+  } else if (lower.includes('gemma')) {
+    shortName = 'Gemma 2 9B';
+    badge = 'Google DeepMind';
+    params = '9B Parameters';
+  }
+
+  return {
+    id,
+    name,
+    shortName,
+    badge,
+    params,
+    ...palette,
+  };
 }
 
 const SAMPLE_PRESETS = [
@@ -176,6 +252,14 @@ export const DualLlmEvaluator: React.FC = () => {
   const [question, setQuestion] = useState(SAMPLE_PRESETS[0].question);
   const [maxMarks, setMaxMarks] = useState(SAMPLE_PRESETS[0].maxMarks);
 
+  // Mode toggles: 'text' (type/paste directly) or 'file' (upload document)
+  const [referenceMode, setReferenceMode] = useState<'text' | 'file'>('text');
+  const [studentMode, setStudentMode] = useState<'text' | 'file'>('text');
+
+  // Text contents
+  const [modelAnswer, setModelAnswer] = useState(SAMPLE_PRESETS[0].modelAnswer);
+  const [studentAnswer, setStudentAnswer] = useState(SAMPLE_PRESETS[0].studentAnswer);
+
   // File uploads for both Reference Scheme and Student's Written Answer
   const [referenceFile, setReferenceFile] = useState<File | null>(() => {
     const slug = SAMPLE_PRESETS[0].title.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '_');
@@ -202,10 +286,19 @@ export const DualLlmEvaluator: React.FC = () => {
   };
 
   // Reference File Dropzone
-  const onDropReference = (acceptedFiles: File[]) => {
+  const onDropReference = async (acceptedFiles: File[]) => {
     if (acceptedFiles && acceptedFiles[0]) {
-      setReferenceFile(acceptedFiles[0]);
+      const file = acceptedFiles[0];
+      setReferenceFile(file);
       setError(null);
+      if (file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
+        try {
+          const text = await file.text();
+          if (text) setModelAnswer(text);
+        } catch {
+          // ignore
+        }
+      }
     }
   };
 
@@ -218,15 +311,25 @@ export const DualLlmEvaluator: React.FC = () => {
     multiple: false,
     accept: {
       'application/pdf': ['.pdf'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
       'text/plain': ['.txt', '.md'],
     },
   });
 
   // Student Written Answer File Dropzone
-  const onDropStudent = (acceptedFiles: File[]) => {
+  const onDropStudent = async (acceptedFiles: File[]) => {
     if (acceptedFiles && acceptedFiles[0]) {
-      setStudentFile(acceptedFiles[0]);
+      const file = acceptedFiles[0];
+      setStudentFile(file);
       setError(null);
+      if (file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
+        try {
+          const text = await file.text();
+          if (text) setStudentAnswer(text);
+        } catch {
+          // ignore
+        }
+      }
     }
   };
 
@@ -239,18 +342,31 @@ export const DualLlmEvaluator: React.FC = () => {
     multiple: false,
     accept: {
       'application/pdf': ['.pdf'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
       'text/plain': ['.txt', '.md'],
     },
   });
 
   const handleEvaluate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!referenceFile) {
-      setError('Please upload a reference answer / marking scheme document (PDF or text).');
+
+    // Check Reference Answer
+    if (referenceMode === 'file' && !referenceFile) {
+      setError('Please upload a reference answer / marking scheme document (PDF, Word, or text).');
       return;
     }
-    if (!studentFile) {
-      setError("Please upload the student's written answer document (PDF or text).");
+    if (referenceMode === 'text' && !modelAnswer.trim()) {
+      setError('Please enter or paste the reference answer / marking scheme.');
+      return;
+    }
+
+    // Check Student Answer
+    if (studentMode === 'file' && !studentFile) {
+      setError("Please upload the student's written answer document (PDF, Word, or text).");
+      return;
+    }
+    if (studentMode === 'text' && !studentAnswer.trim()) {
+      setError("Please enter or paste the student's written answer.");
       return;
     }
 
@@ -262,8 +378,18 @@ export const DualLlmEvaluator: React.FC = () => {
       const formData = new FormData();
       formData.append('question', question);
       formData.append('maxMarks', String(maxMarks));
-      formData.append('referenceFile', referenceFile);
-      formData.append('studentFile', studentFile);
+
+      if (referenceMode === 'file' && referenceFile) {
+        formData.append('referenceFile', referenceFile);
+      } else {
+        formData.append('modelAnswer', modelAnswer.trim());
+      }
+
+      if (studentMode === 'file' && studentFile) {
+        formData.append('studentFile', studentFile);
+      } else {
+        formData.append('studentAnswer', studentAnswer.trim());
+      }
 
       const res = await api.post<{ success: boolean; data: MultiLlmEvaluationResponse } | MultiLlmEvaluationResponse>('/analysis/dual-evaluate', formData);
       // The API wraps payloads as { success, data }; tolerate a bare payload too.
@@ -272,12 +398,7 @@ export const DualLlmEvaluator: React.FC = () => {
       setResult(payload);
       setOverrideMarks(payload.consensus.assigned_marks);
     } catch (err: any) {
-      setError(
-        err.response?.data?.message || 
-        err.response?.data?.error?.message || 
-        err.message ||
-        'Failed to complete the multi-model evaluation.'
-      );
+      setError(apiErrorMessage(err, 'Failed to complete the multi-model evaluation.'));
     } finally {
       setLoading(false);
     }
@@ -286,6 +407,8 @@ export const DualLlmEvaluator: React.FC = () => {
   const loadPreset = (preset: typeof SAMPLE_PRESETS[0]) => {
     setQuestion(preset.question);
     setMaxMarks(preset.maxMarks);
+    setModelAnswer(preset.modelAnswer);
+    setStudentAnswer(preset.studentAnswer);
 
     // Create virtual File objects from preset text to seamlessly fit the upload workflow
     const slug = preset.title.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '_');
@@ -303,6 +426,8 @@ export const DualLlmEvaluator: React.FC = () => {
   const handleResetForm = () => {
     setQuestion('');
     setMaxMarks(10);
+    setModelAnswer('');
+    setStudentAnswer('');
     setReferenceFile(null);
     setStudentFile(null);
     setResult(null);
@@ -319,32 +444,57 @@ export const DualLlmEvaluator: React.FC = () => {
     return { label: 'D/F (Needs Improvement)', variant: 'error' as const };
   };
 
+  const [copiedFeedback, setCopiedFeedback] = useState(false);
+
+  const currentMarks = overrideMarks !== null && !isNaN(overrideMarks) 
+    ? overrideMarks 
+    : (result?.consensus.assigned_marks ?? 0);
+  const currentPercentage = result?.max_marks 
+    ? Number(((currentMarks / result.max_marks) * 100).toFixed(1)) 
+    : 0;
+
   const handleSaveMarks = () => {
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
-  // Render exactly the jurors the backend consulted; a heuristic entry is styled
-  // distinctly so it can never be mistaken for a model opinion.
+  // Render exactly the jurors the backend consulted, resolved with dynamic specs
   const allModelResults = Object.entries(result?.models ?? {}).map(([id, data], index) => {
-    const heuristic = data.kind === 'heuristic';
-    const style = heuristic ? HEURISTIC_STYLE : JUROR_STYLES[index % JUROR_STYLES.length];
+    const spec = resolveModelSpec(id, data, index);
     return {
-      spec: {
-        id,
-        shortName: heuristic ? data.name : shortModelName(data.name),
-        badge: heuristic ? 'Offline heuristic' : data.provider ?? 'LLM juror',
-        params: heuristic ? 'Word-overlap estimate' : data.name,
-        ...style,
-      },
+      spec,
       data,
     };
   });
 
+  const handleCopySummary = () => {
+    if (!result) return;
+    const summaryText = `Academic Evaluation Summary
+Question: ${result.question}
+Max Marks: ${result.max_marks}
+Assigned Mark: ${currentMarks} / ${result.max_marks} (${currentPercentage}%)
+Grade: ${getGradeBadge(currentPercentage).label}
+Consensus Rubric Score: ${result.consensus.rubric_overall_score} / 10
+- Conceptual Accuracy: ${result.consensus.rubric_breakdown.conceptual_accuracy} / 10
+- Completeness: ${result.consensus.rubric_breakdown.completeness} / 10
+- Clarity: ${result.consensus.rubric_breakdown.clarity} / 10
+- Terminology: ${result.consensus.rubric_breakdown.terminology} / 10
+
+Recommendation:
+${result.consensus.recommendation}
+
+Juror Rationale(s):
+${allModelResults.map(({ spec, data }) => `[${spec.shortName}] (${data.assigned_marks}/${result.max_marks}): ${data.feedback}`).join('\n\n')}`;
+
+    navigator.clipboard.writeText(summaryText);
+    setCopiedFeedback(true);
+    setTimeout(() => setCopiedFeedback(false), 2500);
+  };
+
   const juryMode = result?.jury?.mode;
   const juryLabel =
     juryMode === 'multi-model'
-      ? `${result?.jury?.responded}-Model Consensus`
+      ? `${result?.jury?.responded ?? allModelResults.length}-Model Consensus`
       : juryMode === 'single-model'
         ? 'Single-Model Opinion'
         : juryMode === 'heuristic'
@@ -548,178 +698,294 @@ export const DualLlmEvaluator: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-              {/* Reference Answer / Marking Scheme (Upload Only) */}
+              {/* Reference Answer / Marking Scheme */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
                     <CheckCircle2 className="w-3.5 h-3.5 text-success" /> Reference Answer / Marking Scheme
                   </Label>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border">
-                    Scheme File
-                  </span>
-                </div>
-
-                <div>
-                  {referenceFile ? (
-                    <div className="w-full min-h-[156px] bg-background border border-success-border rounded-xl p-4 flex flex-col justify-between shadow-sm transition">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-lg bg-success-bg border border-success-border flex items-center justify-center shrink-0">
-                            <FileText className="w-5 h-5 text-success" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-sm font-semibold text-foreground truncate" title={referenceFile.name}>
-                              {referenceFile.name}
-                            </div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
-                              <span>{formatBytes(referenceFile.size)}</span>
-                              <span className="inline-block w-1 h-1 rounded-full bg-border" />
-                              <span className="text-success font-medium flex items-center gap-1">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-success" /> Attached
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => setReferenceFile(null)}
-                          className="p-1.5 rounded-lg border border-border hover:border-destructive/50 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition cursor-pointer shrink-0"
-                          title="Remove file"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-3 border-t border-border text-xs">
-                        <span className="text-muted-foreground">Rubric scheme ready</span>
-                        <label className="text-primary hover:text-primary-600 font-medium cursor-pointer flex items-center gap-1 transition">
-                          <FileUp className="w-3.5 h-3.5" />
-                          Change File
-                          <input
-                            type="file"
-                            accept=".pdf,.txt,.md,application/pdf,text/plain"
-                            onChange={(e) => {
-                              if (e.target.files?.[0]) {
-                                setReferenceFile(e.target.files[0]);
-                                setError(null);
-                              }
-                            }}
-                            className="hidden"
-                          />
-                        </label>
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      {...getRefRootProps()}
+                  <div className="flex items-center gap-1 bg-muted p-0.5 rounded-lg border border-border">
+                    <button
+                      type="button"
+                      onClick={() => setReferenceMode('text')}
                       className={cn(
-                        "w-full min-h-[156px] rounded-xl border-2 border-dashed transition-all flex flex-col items-center justify-center p-5 cursor-pointer text-center group",
-                        isRefDragActive
-                          ? "border-success bg-success/5"
-                          : "border-border hover:border-success/50 bg-muted/30 hover:bg-muted/50"
+                        "px-2.5 py-1 rounded text-[11px] font-medium transition cursor-pointer",
+                        referenceMode === 'text'
+                          ? "bg-background text-foreground shadow-xs font-semibold"
+                          : "text-muted-foreground hover:text-foreground"
                       )}
                     >
-                      <input {...getRefInputProps()} />
-                      <div className="w-10 h-10 rounded-xl bg-success-bg border border-success-border flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                        <UploadCloud className="w-5 h-5 text-success" />
-                      </div>
-                      <p className="text-xs sm:text-sm font-semibold text-foreground">
-                        Upload Reference Scheme (PDF / Text)
-                      </p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Drag & drop PDF rubric or text scheme, or click to browse
-                      </p>
-                    </div>
-                  )}
+                      Paste Text
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReferenceMode('file')}
+                      className={cn(
+                        "px-2.5 py-1 rounded text-[11px] font-medium transition cursor-pointer flex items-center gap-1",
+                        referenceMode === 'file'
+                          ? "bg-background text-foreground shadow-xs font-semibold"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <FileUp className="w-3 h-3" />
+                      Upload File
+                    </button>
+                  </div>
                 </div>
+
+                {referenceMode === 'text' ? (
+                  <div>
+                    <textarea
+                      required={referenceMode === 'text'}
+                      rows={6}
+                      value={modelAnswer}
+                      onChange={(e) => setModelAnswer(e.target.value)}
+                      className="w-full rounded-lg border border-input bg-background p-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors resize-none leading-relaxed"
+                      placeholder="Paste reference model answer or key rubric concepts..."
+                    />
+                    <div className="flex items-center justify-between mt-1.5 text-xs text-muted-foreground px-1">
+                      <span>{modelAnswer.trim() ? `${modelAnswer.trim().split(/\s+/).length} words` : "No text entered"}</span>
+                      <button
+                        type="button"
+                        onClick={() => setReferenceMode('file')}
+                        className="text-primary hover:underline flex items-center gap-1 font-medium cursor-pointer"
+                      >
+                        <FileUp className="w-3.5 h-3.5" /> Upload file instead (PDF / Word / Text)
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    {referenceFile ? (
+                      <div className="w-full min-h-[156px] bg-background border border-success-border rounded-xl p-4 flex flex-col justify-between shadow-xs transition">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-lg bg-success-bg border border-success-border flex items-center justify-center shrink-0">
+                              <FileText className="w-5 h-5 text-success" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-foreground truncate" title={referenceFile.name}>
+                                {referenceFile.name}
+                              </div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
+                                <span>{formatBytes(referenceFile.size)}</span>
+                                <span className="inline-block w-1 h-1 rounded-full bg-border" />
+                                <span className="text-success font-medium flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-success" /> Attached
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setReferenceFile(null)}
+                            className="p-1.5 rounded-lg border border-border hover:border-destructive/50 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition cursor-pointer shrink-0"
+                            title="Remove file"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-3 border-t border-border text-xs">
+                          <span className="text-muted-foreground">Rubric scheme ready</span>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setReferenceMode('text')}
+                              className="text-muted-foreground hover:text-foreground font-medium transition cursor-pointer"
+                            >
+                              Edit as text
+                            </button>
+                            <label className="text-primary hover:text-primary-600 font-medium cursor-pointer flex items-center gap-1 transition">
+                              <FileUp className="w-3.5 h-3.5" />
+                              Change File
+                              <input
+                                type="file"
+                                accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                                onChange={(e) => {
+                                  if (e.target.files?.[0]) {
+                                    onDropReference([e.target.files[0]]);
+                                  }
+                                }}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        {...getRefRootProps()}
+                        className={cn(
+                          "w-full min-h-[156px] rounded-xl border-2 border-dashed transition-all flex flex-col items-center justify-center p-5 cursor-pointer text-center group",
+                          isRefDragActive
+                            ? "border-success bg-success/5"
+                            : "border-border hover:border-success/50 bg-muted/30 hover:bg-muted/50"
+                        )}
+                      >
+                        <input {...getRefInputProps()} />
+                        <div className="w-10 h-10 rounded-xl bg-success-bg border border-success-border flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
+                          <UploadCloud className="w-5 h-5 text-success" />
+                        </div>
+                        <p className="text-xs sm:text-sm font-semibold text-foreground">
+                          Upload Reference Scheme (PDF / Word / Text)
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Drag & drop PDF rubric, Word doc, or text scheme, or click to browse
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Student's Written Answer (Upload File) */}
+              {/* Student's Written Answer */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="student-answer" className="text-xs font-semibold uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
                     <BrainCircuit className="w-3.5 h-3.5 text-primary" /> Student's Written Answer
                   </Label>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border">
-                    Student Script
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1 bg-muted p-0.5 rounded-lg border border-border">
+                      <button
+                        type="button"
+                        onClick={() => setStudentMode('text')}
+                        className={cn(
+                          "px-2.5 py-1 rounded text-[11px] font-medium transition cursor-pointer",
+                          studentMode === 'text'
+                            ? "bg-background text-foreground shadow-xs font-semibold"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        Paste Text
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStudentMode('file')}
+                        className={cn(
+                          "px-2.5 py-1 rounded text-[11px] font-medium transition cursor-pointer flex items-center gap-1",
+                          studentMode === 'file'
+                            ? "bg-background text-foreground shadow-xs font-semibold"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <FileUp className="w-3 h-3" />
+                        Upload File
+                      </button>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border">
+                      {studentMode === 'file' ? (studentFile ? 'File Attached' : 'Upload') : 'Submission'}
+                    </span>
+                  </div>
                 </div>
 
-                <div>
-                  {studentFile ? (
-                    <div className="w-full min-h-[156px] bg-background border border-primary/30 rounded-xl p-4 flex flex-col justify-between shadow-sm transition">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                            <FileText className="w-5 h-5 text-primary" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-sm font-semibold text-foreground truncate" title={studentFile.name}>
-                              {studentFile.name}
+                {studentMode === 'text' ? (
+                  <div>
+                    <textarea
+                      id="student-answer"
+                      required={studentMode === 'text'}
+                      rows={6}
+                      value={studentAnswer}
+                      onChange={(e) => setStudentAnswer(e.target.value)}
+                      className="w-full rounded-lg border border-input bg-background p-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors resize-none leading-relaxed"
+                      placeholder="Paste student answer text to evaluate..."
+                    />
+                    <div className="flex items-center justify-between mt-1.5 text-xs text-muted-foreground px-1">
+                      <span>{studentAnswer.trim() ? `${studentAnswer.trim().split(/\s+/).length} words` : "No text entered"}</span>
+                      <button
+                        type="button"
+                        onClick={() => setStudentMode('file')}
+                        className="text-primary hover:underline flex items-center gap-1 font-medium cursor-pointer"
+                      >
+                        <FileUp className="w-3.5 h-3.5" /> Upload file instead (PDF / Word / Text)
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    {studentFile ? (
+                      <div className="w-full min-h-[156px] bg-background border border-primary/30 rounded-xl p-4 flex flex-col justify-between shadow-xs transition">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                              <FileText className="w-5 h-5 text-primary" />
                             </div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
-                              <span>{formatBytes(studentFile.size)}</span>
-                              <span className="inline-block w-1 h-1 rounded-full bg-border" />
-                              <span className="text-primary font-medium flex items-center gap-1">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-primary" /> Attached
-                              </span>
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-foreground truncate" title={studentFile.name}>
+                                {studentFile.name}
+                              </div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
+                                <span>{formatBytes(studentFile.size)}</span>
+                                <span className="inline-block w-1 h-1 rounded-full bg-border" />
+                                <span className="text-primary font-medium flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-primary" /> Attached
+                                </span>
+                              </div>
                             </div>
                           </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setStudentFile(null)}
+                            className="p-1.5 rounded-lg border border-border hover:border-destructive/50 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition cursor-pointer shrink-0"
+                            title="Remove file"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => setStudentFile(null)}
-                          className="p-1.5 rounded-lg border border-border hover:border-destructive/50 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition cursor-pointer shrink-0"
-                          title="Remove file"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-between pt-3 border-t border-border text-xs">
+                          <span className="text-muted-foreground">Student script ready</span>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setStudentMode('text')}
+                              className="text-muted-foreground hover:text-foreground font-medium transition cursor-pointer"
+                            >
+                              Edit as text
+                            </button>
+                            <label className="text-primary hover:text-primary-600 font-medium cursor-pointer flex items-center gap-1 transition">
+                              <FileUp className="w-3.5 h-3.5" />
+                              Change File
+                              <input
+                                type="file"
+                                accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                                onChange={(e) => {
+                                  if (e.target.files?.[0]) {
+                                    onDropStudent([e.target.files[0]]);
+                                  }
+                                }}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+                        </div>
                       </div>
-
-                      <div className="flex items-center justify-between pt-3 border-t border-border text-xs">
-                        <span className="text-muted-foreground">Student script ready</span>
-                        <label className="text-primary hover:text-primary-600 font-medium cursor-pointer flex items-center gap-1 transition">
-                          <FileUp className="w-3.5 h-3.5" />
-                          Change File
-                          <input
-                            type="file"
-                            accept=".pdf,.txt,.md,application/pdf,text/plain"
-                            onChange={(e) => {
-                              if (e.target.files?.[0]) {
-                                setStudentFile(e.target.files[0]);
-                                setError(null);
-                              }
-                            }}
-                            className="hidden"
-                          />
-                        </label>
+                    ) : (
+                      <div
+                        {...getStudentRootProps()}
+                        className={cn(
+                          "w-full min-h-[156px] rounded-xl border-2 border-dashed transition-all flex flex-col items-center justify-center p-5 cursor-pointer text-center group",
+                          isStudentDragActive
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50 bg-muted/30 hover:bg-muted/50"
+                        )}
+                      >
+                        <input {...getStudentInputProps()} />
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
+                          <UploadCloud className="w-5 h-5 text-primary" />
+                        </div>
+                        <p className="text-xs sm:text-sm font-semibold text-foreground">
+                          Upload Student's Written Answer (PDF / Word / Text)
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Drag & drop student's PDF script, Word document, or text answer, or click to browse
+                        </p>
                       </div>
-                    </div>
-                  ) : (
-                    <div
-                      {...getStudentRootProps()}
-                      className={cn(
-                        "w-full min-h-[156px] rounded-xl border-2 border-dashed transition-all flex flex-col items-center justify-center p-5 cursor-pointer text-center group",
-                        isStudentDragActive
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:border-primary/50 bg-muted/30 hover:bg-muted/50"
-                      )}
-                    >
-                      <input {...getStudentInputProps()} />
-                      <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                        <UploadCloud className="w-5 h-5 text-primary" />
-                      </div>
-                      <p className="text-xs sm:text-sm font-semibold text-foreground">
-                        Upload Student's Written Answer (PDF / Text)
-                      </p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Drag & drop student's PDF script or text answer, or click to browse
-                      </p>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -727,7 +993,7 @@ export const DualLlmEvaluator: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-border">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Cpu className="w-4 h-4 text-primary" />
-                <span>Runs 4 models concurrently in parallel inference threads</span>
+                <span>Runs independent LLM jurors concurrently in parallel inference threads</span>
               </div>
 
               <Button
@@ -739,7 +1005,7 @@ export const DualLlmEvaluator: React.FC = () => {
                 {loading ? (
                   <>
                     <RotateCcw className="h-4 w-4 animate-spin" />
-                    <span>Asking both jurors…</span>
+                    <span>Evaluating answer with LLM jurors…</span>
                   </>
                 ) : (
                   <>
@@ -783,33 +1049,47 @@ export const DualLlmEvaluator: React.FC = () => {
                         <AlertTriangle className="w-3 h-3" /> One juror only — no cross-check
                       </Badge>
                     )}
-                    {(referenceFile || result.reference_answer) && (
+                    {(referenceFile || result.reference_answer || modelAnswer) && (
                       <span className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full bg-muted border border-border text-muted-foreground">
                         <FileText className="w-3 h-3 text-success" />
-                        <span>Scheme: <strong className="text-foreground">{referenceFile?.name || 'Attached Marking Scheme'}</strong></span>
+                        <span>Scheme: <strong className="text-foreground">{referenceMode === 'file' && referenceFile ? referenceFile.name : 'Custom Rubric Text'}</strong></span>
                       </span>
                     )}
-                    {(studentFile || result.student_answer) && (
+                    {(studentFile || result.student_answer || studentAnswer) && (
                       <span className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full bg-muted border border-border text-muted-foreground">
                         <BrainCircuit className="w-3 h-3 text-primary" />
-                        <span>Student Script: <strong className="text-foreground">{studentFile?.name || 'Attached Student Submission'}</strong></span>
+                        <span>Student Script: <strong className="text-foreground">{studentMode === 'file' && studentFile ? studentFile.name : 'Written Answer'}</strong></span>
                       </span>
                     )}
-                    {result.consensus.has_high_discrepancy ? (
-                      juryMode === 'multi-model' && (
+                    {juryMode === 'multi-model' && (
+                      result.consensus.has_high_discrepancy ? (
                         <Badge variant="warning" className="gap-1">
                           <AlertTriangle className="w-3 h-3" /> Jurors disagree by {result.consensus.variance_percentage}%
                         </Badge>
+                      ) : (
+                        <Badge variant="success" className="gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Jurors agree (Δ {result.consensus.variance_percentage}%)
+                        </Badge>
                       )
-                    ) : (
-                      <Badge variant="success" className="gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Jurors agree (Δ {result.consensus.variance_percentage}%)
-                      </Badge>
                     )}
                     {result.privacy && Object.keys(result.privacy.pii_redactions).length > 0 && (
                       <Badge variant="outline" className="gap-1" title={JSON.stringify(result.privacy.pii_redactions)}>
                         <ShieldCheck className="w-3 h-3" /> {Object.values(result.privacy.pii_redactions).reduce((a, b) => a + b, 0)} PII item(s) redacted before AI
                       </Badge>
+                    )}
+                    {result.jury?.failed && result.jury.failed.length > 0 && (
+                      <div className="w-full mt-1.5 rounded-lg border border-warning-border bg-warning-bg/40 p-2.5 text-xs text-warning flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold">Juror Notification: </span>
+                          {result.jury.failed.map((f, i) => (
+                            <span key={i}>
+                              Model <strong className="font-semibold">{f.name}</strong> was unavailable ({f.error}).{' '}
+                            </span>
+                          ))}
+                          <span>Consensus computed from responding juror(s).</span>
+                        </div>
+                      </div>
                     )}
                   </div>
 
@@ -817,18 +1097,18 @@ export const DualLlmEvaluator: React.FC = () => {
                     <Award className="w-7 h-7 text-warning" />
                     Assigned Mark:{' '}
                     <span className="text-primary font-black">
-                      {overrideMarks ?? result.consensus.assigned_marks}
+                      {currentMarks}
                     </span>{' '}
-                    <span className="text-lg font-normal text-muted-foreground">/ {result.max_marks} Marks</span>
+                    <span className="text-lg font-normal text-muted-foreground">/ {result.max_marks} Marks ({currentPercentage}%)</span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <Badge 
-                    variant={getGradeBadge(result.consensus.percentage).variant} 
+                    variant={getGradeBadge(currentPercentage).variant} 
                     className="text-sm px-3.5 py-1.5 font-bold"
                   >
-                    {getGradeBadge(result.consensus.percentage).label}
+                    {getGradeBadge(currentPercentage).label}
                   </Badge>
                   <div className="text-right px-4 py-2 rounded-xl bg-muted/60 border border-border">
                     <div className="text-2xl font-black text-primary">
@@ -1028,7 +1308,7 @@ export const DualLlmEvaluator: React.FC = () => {
                     {allModelResults.map(({ spec, data }) => (
                       <tr key={spec.id} className="hover:bg-muted/30 transition-colors">
                         <td className="py-3.5 px-4 font-bold text-foreground flex items-center gap-2">
-                          <span className={cn("w-2 h-2 rounded-full", spec.textColor.replace('text-', 'bg-'))} />
+                          <span className={cn("w-2 h-2 rounded-full", spec.dotColor)} />
                           {spec.shortName}
                         </td>
                         <td className="py-3.5 px-4">
@@ -1067,7 +1347,28 @@ export const DualLlmEvaluator: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopySummary}
+                  className="gap-1.5 cursor-pointer text-xs"
+                  title="Copy full consensus and rubric breakdown to clipboard"
+                >
+                  {copiedFeedback ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-success" />
+                      <span className="text-success font-semibold">Summary Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-primary" />
+                      <span>Copy Evaluation Summary</span>
+                    </>
+                  )}
+                </Button>
+
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-semibold text-muted-foreground">Grade:</span>
                   <input
@@ -1075,7 +1376,7 @@ export const DualLlmEvaluator: React.FC = () => {
                     step="0.5"
                     min="0"
                     max={result.max_marks}
-                    value={overrideMarks ?? result.consensus.assigned_marks}
+                    value={currentMarks}
                     onChange={(e) => setOverrideMarks(Number(e.target.value))}
                     className="w-20 bg-background border border-input rounded-lg px-2.5 py-2 text-sm text-center font-extrabold text-primary focus:outline-none focus:ring-2 focus:ring-ring"
                   />
