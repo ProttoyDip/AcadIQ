@@ -18,6 +18,8 @@ router.post("/question-review", analysisController.reviewQuestions);
 router.post("/co-mapping", analysisController.mapCourseOutcomes);
 router.post("/full", analysisController.analyzeFull);
 router.post("/generate-paper", analysisController.generatePaper);
+router.post("/rubric", analysisController.generateRubric);
+router.post("/rewrite-question", analysisController.rewriteQuestion);
 router.post(
   "/dual-evaluate",
   uploadReferenceScheme.any(),

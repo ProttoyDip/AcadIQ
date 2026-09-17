@@ -4,7 +4,8 @@ import { NavLink, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { GraduationCap, Menu, X } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { navGroups } from "./navigation";
+import { navGroupsFor } from "./navigation";
+import { useAuth } from "../../hooks/useAuth";
 
 /**
  * Portal navigation for small screens. The sidebar is desktop-only, so this
@@ -18,6 +19,8 @@ import { navGroups } from "./navigation";
 export default function MobileNav() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const { user } = useAuth();
+  const navGroups = navGroupsFor(user?.role);
 
   // Close on navigation, and give the user an Escape route out of the drawer.
   useEffect(() => setOpen(false), [location.pathname]);

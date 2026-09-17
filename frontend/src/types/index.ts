@@ -8,6 +8,7 @@ export interface Course {
   updatedAt?: string;
   syllabusDocuments?: SyllabusDocument[];
   questionPapers?: QuestionPaper[];
+  courseOutcomes?: Array<{ id: number; code: string; description: string }>;
 }
 
 export interface SyllabusDocument {
@@ -423,4 +424,438 @@ export interface AnalysisReport {
   createdAt: string;
   recommendations: Recommendation[];
   explanation?: AIExplanation | null;
+}
+
+/* ---------- Faculty workflows: marks, rubrics, blueprint, question bank, lecture plan, gaps ---------- */
+
+export interface MarksUploadResult {
+  paperId: number;
+  students: number;
+  questionsMatched: number;
+  questionsInPaper: number;
+  unmatchedQuestions: number[];
+  unknownColumns: string[];
+}
+
+export interface MarksSummary {
+  paperId: number;
+  students: number;
+  uploadedAt: string | null;
+}
+
+export interface ItemStat {
+  questionId: number;
+  sequenceNumber: number;
+  maxMarks: number;
+  text: string;
+  bloomLevel: string | null;
+  topic: string | null;
+  mean: number;
+  sd: number;
+  difficulty: number;
+  difficultyBand: "EASY" | "MODERATE" | "HARD";
+  discrimination: number;
+  discriminationBand: "EXCELLENT" | "GOOD" | "MARGINAL" | "POOR";
+  pointBiserial: number | null;
+  zeroRate: number;
+  fullMarksRate: number;
+}
+
+export interface GroupAttainment {
+  key: string;
+  label: string;
+  questionCount: number;
+  maxMarks: number;
+  meanPercent: number;
+  studentsAboveThreshold: number;
+  attainmentLevel: 0 | 1 | 2 | 3;
+  questionSequence: number[];
+}
+
+export interface MarksAnalysisResult {
+  paperId: number;
+  courseId: number;
+  paper: { year: number; semester: string };
+  thresholdPercent: number;
+  students: number;
+  items: ItemStat[];
+  totals: {
+    maxMarks: number;
+    mean: number;
+    median: number;
+    sd: number;
+    min: number;
+    max: number;
+    passMarkPercent: number;
+    passRate: number;
+    cronbachAlpha: number | null;
+    alphaBand: "EXCELLENT" | "GOOD" | "ACCEPTABLE" | "QUESTIONABLE" | "POOR" | null;
+  };
+  distribution: Array<{ label: string; from: number; to: number; count: number }>;
+  bloomAttainment: GroupAttainment[];
+  topicAttainment: GroupAttainment[];
+  coAttainment: GroupAttainment[];
+  coMappingSource: { reportId: number; createdAt: string } | null;
+  recommendations: Array<{ message: string; priority: Priority; questionId?: number }>;
+  note: string;
+}
+
+export interface RubricQuestionScheme {
+  questionId: number;
+  sequenceNumber: number;
+  marks: number;
+  modelAnswer: string;
+  markingPoints: Array<{ point: string; marks: number }>;
+  partialCreditRules: string[];
+  commonErrors: string[];
+}
+
+export interface RubricRecord {
+  id: number;
+  courseId: number;
+  questionPaperId: number | null;
+  name: string;
+  description: string | null;
+  criteria: { questions: RubricQuestionScheme[]; generalGuidance: string[]; rescaled?: number[] };
+  maxScore: number | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface QuestionRewriteVariant {
+  text: string;
+  bloomLevel: BloomLevel;
+  marks: number;
+  rationale: string;
+}
+
+export interface QuestionRewriteResult {
+  original: { text: string; marks: number };
+  mode: string;
+  variants: QuestionRewriteVariant[];
+}
+
+export interface ExamBlueprint {
+  id?: number;
+  courseId: number;
+  targetBloom: Record<string, number>;
+  outcomeWeights: Record<string, number> | null;
+  topicWeights: Record<string, number> | null;
+  totalMarks: number;
+  questionCount: number;
+  notes: string | null;
+  updatedAt?: string;
+  isDefault?: boolean;
+}
+
+export interface BlueprintComparison {
+  courseId: number;
+  paperId: number;
+  totalMarks: number;
+  labelledMarks: number;
+  unlabelledQuestions: number;
+  bloom: Array<{ level: string; target: number; observed: number; deviation: number }>;
+  outcomes: Array<{ code: string; target: number; observed: number; deviation: number }> | null;
+  topics: Array<{ topic: string; target: number; observed: number; deviation: number }> | null;
+  maxAbsDeviation: number;
+  fitScore: number;
+  verdict: "ON_TARGET" | "MINOR_DRIFT" | "OFF_TARGET";
+  notes: string[];
+}
+
+export interface BankQuestion extends Question {
+  paper: { id: number; year: number; semester: string };
+  usedCount: number;
+}
+
+export interface LecturePlanWeek {
+  week: number;
+  title: string;
+  topics: string[];
+  outcomes: string[];
+  activities: string[];
+  assessment: string | null;
+  materialsHint: string | null;
+}
+
+export interface LecturePlanRecord {
+  id: number;
+  courseId: number;
+  weeks: number;
+  hoursPerWeek: number;
+  planJson: { title: string; weeks: LecturePlanWeek[]; assumptions: string[] };
+  createdAt: string;
+}
+
+export interface MaterialGapTopic {
+  chunkIndex: number;
+  excerpt: string;
+  bestSimilarity: number;
+  status: "COVERED" | "PARTIAL" | "GAP";
+  bestMaterial: { materialId: number; title: string; locator: string | null } | null;
+}
+
+export interface MaterialGapResult {
+  courseId: number;
+  syllabusChunks: number;
+  materials: number;
+  covered: number;
+  partial: number;
+  gaps: number;
+  coveragePercent: number;
+  topics: MaterialGapTopic[];
+  method: "EMBEDDING" | "UNAVAILABLE";
+  note: string;
+}
+
+/* ---------- Timetable ---------- */
+
+export type SessionStatus = "SCHEDULED" | "HELD" | "CANCELLED" | "RESCHEDULED" | "HOLIDAY" | "MAKEUP";
+export type SlotKind = "LECTURE" | "LAB" | "TUTORIAL" | "OFFICE_HOUR" | "OTHER";
+
+export interface Term {
+  id: number;
+  facultyId: number;
+  name: string;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+  feedToken?: string | null;
+  createdAt: string;
+  _count?: { slots: number; sessions: number; events: number };
+}
+
+export interface ClassSlot {
+  id: number;
+  termId: number;
+  courseId: number | null;
+  courseLabel: string;
+  section: string | null;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  room: string | null;
+  kind: SlotKind;
+  source: "MANUAL" | "AI_IMPORT";
+  course?: { id: number; courseCode: string; courseName: string } | null;
+}
+
+export interface SlotDraft {
+  courseId?: number | null;
+  courseLabel: string;
+  section?: string | null;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  room?: string | null;
+  kind: SlotKind;
+  source?: "MANUAL" | "AI_IMPORT";
+}
+
+export interface ExtractedSlot extends SlotDraft {
+  confidence: number;
+  matchedCourse: string | null;
+}
+
+export interface RoutineExtractResult {
+  file: string;
+  facultyName: string;
+  initials: string;
+  scope?: "PERSONAL" | "FACULTY";
+  method?: "DOCUMENT" | "VISION";
+  slots: ExtractedSlot[];
+  termHint: { name: string | null; startDate: string | null; endDate: string | null } | null;
+  warnings: string[];
+  lowConfidence: number;
+  textChars: number;
+}
+
+export interface CalendarEvent {
+  id: number;
+  termId: number;
+  date: string;
+  endDate: string | null;
+  kind: "HOLIDAY" | "EXAM_WEEK" | "DEADLINE" | "ASSESSMENT" | "OTHER";
+  title: string;
+  source: string;
+  courseId?: number | null;
+  section?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  course?: { id: number; courseCode: string } | null;
+}
+
+export interface Clash {
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  rule: "SAME_DAY" | "OVERLOADED_WEEK" | "OVERLAPS_CLASS" | "ON_BLOCKED_DAY" | "UNTAUGHT_TOPICS";
+  message: string;
+  hint: string;
+  eventIds: number[];
+  sessionId?: number;
+}
+
+export interface WorkloadReport {
+  termId: number;
+  termName: string;
+  contactHoursPerWeek: number;
+  perCourse: Array<{ courseLabel: string; hoursPerWeek: number; sessions: number; held: number; cancelled: number; makeups: number }>;
+  perWeekday: Array<{ day: string; dayOfWeek: number; hours: number; classes: number }>;
+  heatmap: { hours: number[]; rows: Array<{ dayOfWeek: number; day: string; cells: number[] }> };
+  statusCounts: Record<string, number>;
+  cancellationRate: number;
+  makeupCoverage: number;
+  busiestDay: string | null;
+  peakWeeks: Array<{ week: number; hours: number }>;
+  totalWeeks: number;
+}
+
+export interface DigestPrefs {
+  digestEnabled: boolean;
+  digestHour: number;
+  digestLastSent: string | null;
+  timezone: string | null;
+  serverTimezone?: string;
+  email: string;
+  mailerConfigured: boolean;
+}
+
+export interface DigestPreview {
+  subject: string;
+  html: string;
+  text: string;
+  prefs: DigestPrefs;
+  mailerConfigured: boolean;
+}
+
+export interface FreeRoomsResult {
+  date: string;
+  startTime: string;
+  endTime: string;
+  free: string[];
+  busy: Array<{ room: string; occupiedBy: string }>;
+  source: "DEPARTMENT_ROUTINE" | "NONE";
+}
+
+export interface DepartmentRoutine {
+  id: number;
+  termLabel: string;
+  originalName: string;
+  slotCount: number;
+  createdAt: string;
+  uploadedBy?: { name: string };
+}
+
+export interface DepartmentSlot {
+  id: number;
+  courseLabel: string;
+  section: string | null;
+  teacher: string | null;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  room: string | null;
+  kind: string;
+}
+
+/* ---------- Assistant ---------- */
+
+export interface AssistantPendingAction {
+  index: number;
+  tool: string;
+  args: Record<string, unknown>;
+  label: string;
+  why: string;
+  mutating: boolean;
+}
+
+export interface AssistantChatReply {
+  reply: string;
+  followUpQuestion: string | null;
+  navigate: string | null;
+  pendingActions: AssistantPendingAction[];
+  actionToken: string | null;
+  results: Array<{ tool: string; label: string; ok: boolean; result?: unknown; error?: string }>;
+  rejected: Array<{ tool: string; reason: string }>;
+  context: { today: string; term: string | null; makeupDebt: number };
+}
+
+export interface AssistantExecuteResult {
+  results: Array<{ index: number; tool: string; ok: boolean; skipped?: boolean; result?: unknown; error?: string }>;
+  summary: string;
+}
+
+export interface ClassSession {
+  id: number;
+  termId: number;
+  slotId: number | null;
+  courseId: number | null;
+  courseLabel: string;
+  section: string | null;
+  date: string;
+  startTime: string;
+  endTime: string;
+  room: string | null;
+  kind: SlotKind;
+  status: SessionStatus;
+  reason: string | null;
+  rescheduledFromId: number | null;
+  plannedWeek: number | null;
+  plannedTopics: string[] | null;
+  coveredTopics: string[] | null;
+  notes: string | null;
+  materialIds: number[] | null;
+  loggedAt: string | null;
+  course?: { id: number; courseCode: string; courseName: string } | null;
+}
+
+export interface FreeSlotCandidate {
+  date: string;
+  startTime: string;
+  endTime: string;
+  room: string | null;
+  score: number;
+  reasons: string[];
+}
+
+export interface MakeupDebt {
+  total: number;
+  courses: Array<{ courseId: number | null; courseLabel: string; owed: Array<Pick<ClassSession, "id" | "date" | "startTime" | "endTime" | "status" | "reason" | "section" | "courseLabel">> }>;
+}
+
+export interface TodayBriefing {
+  term: Term | null;
+  date: string;
+  sessions: Array<ClassSession & { lastLog: { date: string; coveredTopics: string[] | null; notes: string | null } | null }>;
+  upcoming: ClassSession[];
+  makeupDebt?: number;
+}
+
+export interface PaceReport {
+  courseId: number;
+  term: { id: number; name: string } | null;
+  planId: number | null;
+  plannedTopics: string[];
+  coveredTopics: string[];
+  remainingTopics: string[];
+  sessions: { total: number; held: number; past?: number; remaining: number; lost: number };
+  expectedCoveredByNow: number;
+  deltaTopics: number;
+  topicsPerRemainingSession?: number | null;
+  status: "AHEAD" | "ON_TRACK" | "BEHIND" | "AT_RISK" | "NO_PLAN" | "NO_TERM";
+  note: string;
+}
+
+export interface ReplanResult {
+  sessions: Array<{ sessionId: number; date: string; topics: string[]; note: string | null }>;
+  dropped: string[];
+  compressed: string[];
+  summary: string;
+  applied: boolean;
+  remainingSessions: number;
+}
+
+export interface ClassNotice {
+  channel: "EMAIL" | "CHAT";
+  subject: string | null;
+  body: string;
 }

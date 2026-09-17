@@ -4,6 +4,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { ThemeToggle } from "../ui/ThemeToggle";
 import MobileNav from "./MobileNav";
+import NotificationCenter from "./NotificationCenter";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,6 +52,8 @@ export default function Topbar() {
           <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
           Institutional QA Node
         </span>
+
+        <NotificationCenter />
 
         <ThemeToggle variant="icon" />
 

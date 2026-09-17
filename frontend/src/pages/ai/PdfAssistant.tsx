@@ -16,6 +16,7 @@ import {
   HelpCircle,
   RefreshCw,
   MessageSquare,
+  Trash2,
 } from "lucide-react";
 import PageHeader from "../../components/layout/PageHeader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
@@ -95,6 +96,42 @@ export default function PdfAssistant() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
+
+  // Load chat history from localStorage when document changes
+  useEffect(() => {
+    if (!selectedDocId) {
+      setChatMessages([]);
+      return;
+    }
+    try {
+      const saved = localStorage.getItem(`acadiq_pdf_chat_${selectedDocId}`);
+      if (saved) {
+        setChatMessages(JSON.parse(saved));
+      } else {
+        setChatMessages([]);
+      }
+    } catch {
+      setChatMessages([]);
+    }
+  }, [selectedDocId]);
+
+  // Persist chat history to localStorage
+  useEffect(() => {
+    if (selectedDocId && chatMessages.length > 0) {
+      try {
+        localStorage.setItem(`acadiq_pdf_chat_${selectedDocId}`, JSON.stringify(chatMessages));
+      } catch {
+        // storage quota exceeded or unavailable
+      }
+    }
+  }, [selectedDocId, chatMessages]);
+
+  const handleClearChat = () => {
+    if (selectedDocId) {
+      localStorage.removeItem(`acadiq_pdf_chat_${selectedDocId}`);
+    }
+    setChatMessages([]);
+  };
 
   // Handle PDF upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -427,9 +464,22 @@ export default function PdfAssistant() {
                 <span className="flex items-center gap-2">
                   <MessageSquare className="h-4 w-4 text-primary" /> Ask Document (RAG)
                 </span>
-                <Badge variant="outline" className="text-[10px]">
-                  Gemma 3 + nomic-embed
-                </Badge>
+                <div className="flex items-center gap-2">
+                  {chatMessages.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-[11px] text-muted-foreground hover:text-destructive"
+                      onClick={handleClearChat}
+                      title="Clear chat history for this document"
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" /> Clear
+                    </Button>
+                  )}
+                  <Badge variant="outline" className="text-[10px]">
+                    Gemma 3 + nomic-embed
+                  </Badge>
+                </div>
               </CardTitle>
               <CardDescription className="text-xs">
                 Answers are grounded strictly in the document context. Sources & page numbers will be cited.

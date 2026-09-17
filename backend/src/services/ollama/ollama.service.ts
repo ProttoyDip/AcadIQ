@@ -154,6 +154,7 @@ export class OllamaService {
       stream: false,
       options: {
         temperature: options.temperature ?? 0.2,
+        ...gpuOption(),
       },
     };
 
@@ -192,6 +193,7 @@ export class OllamaService {
       stream: false,
       options: {
         temperature: options.temperature ?? 0.2,
+        ...gpuOption(),
       },
     };
 
@@ -233,7 +235,7 @@ export class OllamaService {
     try {
       const response = await this.fetchOllama("/api/embed", {
         method: "POST",
-        body: JSON.stringify({ model, input: text }),
+        body: JSON.stringify({ model, input: text, options: gpuOption() }),
       }, 30000);
 
       if (response.ok) {
@@ -248,7 +250,7 @@ export class OllamaService {
 
     const response = await this.fetchOllama("/api/embeddings", {
       method: "POST",
-      body: JSON.stringify({ model, prompt: text }),
+      body: JSON.stringify({ model, prompt: text, options: gpuOption() }),
     }, 30000);
 
     if (!response.ok) {
@@ -269,6 +271,18 @@ export class OllamaService {
 
     return new Float32Array(data.embedding);
   }
+}
+
+/**
+ * Ollama `options` fragment pinning GPU offload, spread into every request body.
+ * Empty when OLLAMA_NUM_GPU is unset, which leaves Ollama's own scheduling alone.
+ *
+ * It applies to embeddings as well as generation on purpose: a backend that
+ * corrupts inference corrupts embeddings too, and a bad vector still looks like
+ * 768 valid floats, so that failure is silent rather than loud.
+ */
+function gpuOption(): { num_gpu?: number } {
+  return env.ollama.numGpu === null ? {} : { num_gpu: env.ollama.numGpu };
 }
 
 export const ollamaService = new OllamaService();

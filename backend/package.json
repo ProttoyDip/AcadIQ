@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon --exec ts-node src/server.ts",
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test tests/ai.test.js tests/embedding.test.js tests/reliability.test.js tests/materials.test.js tests/security_and_copilot.test.js tests/copilot_db.test.js tests/ollama_ai.test.js",
+    "test": "npm run build && node --test tests/ai.test.js tests/embedding.test.js tests/reliability.test.js tests/materials.test.js tests/itemAnalysis.test.js tests/schedule.test.js tests/clashes.test.js tests/assistant.test.js tests/security_and_copilot.test.js tests/copilot_db.test.js tests/copilot_retry.test.js tests/copilot_voice.test.js tests/ollama_ai.test.js",
     "test:ai": "npm run build && node --test tests/ollama_ai.test.js",
     "test:api": "npm run build && node --test tests/api.integration.test.js",
     "start": "node dist/server.js",

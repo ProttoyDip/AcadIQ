@@ -3,6 +3,7 @@ import { AnimatePresence } from "framer-motion";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import PageTransition from "./PageTransition";
+import AssistantBubble from "../assistant/AssistantBubble";
 
 export default function AppShell() {
   const location = useLocation();
@@ -22,6 +23,7 @@ export default function AppShell() {
           </div>
         </main>
       </div>
+      <AssistantBubble />
     </div>
   );
 }

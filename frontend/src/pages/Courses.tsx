@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, GraduationCap, Plus, UploadCloud } from "lucide-react";
-import { useCourses, useCreateCourse } from "../hooks/useCourses";
+import { ArrowRight, GraduationCap, Plus, Trash2, UploadCloud } from "lucide-react";
+import { useCourses, useCreateCourse, useDeleteCourse } from "../hooks/useCourses";
 import { apiErrorMessage } from "../services/api";
 import PageHeader from "../components/layout/PageHeader";
 import { Button } from "../components/ui/button";
@@ -26,6 +26,20 @@ export default function Courses() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ courseCode: "", courseName: "", description: "" });
   const [error, setError] = useState<string | null>(null);
+  const deleteCourse = useDeleteCourse();
+  const [pendingDelete, setPendingDelete] = useState<{ id: number; courseCode: string; courseName: string } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleDelete() {
+    if (!pendingDelete) return;
+    setDeleteError(null);
+    try {
+      await deleteCourse.mutateAsync(pendingDelete.id);
+      setPendingDelete(null);
+    } catch (err) {
+      setDeleteError(apiErrorMessage(err, "Could not remove this course"));
+    }
+  }
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
@@ -136,9 +150,22 @@ export default function Courses() {
                   >
                     Open course <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
-                  <Link to="/upload" className="flex items-center gap-1 text-small font-medium text-primary hover:underline">
-                    <UploadCloud className="h-3.5 w-3.5" /> Upload
-                  </Link>
+                  <div className="flex items-center gap-3">
+                    <Link to="/upload" className="flex items-center gap-1 text-small font-medium text-primary hover:underline">
+                      <UploadCloud className="h-3.5 w-3.5" /> Upload
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteError(null);
+                        setPendingDelete({ id: course.id, courseCode: course.courseCode, courseName: course.courseName });
+                      }}
+                      className="flex items-center gap-1 text-small font-medium text-muted-foreground transition-colors hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`Remove ${course.courseCode}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Remove
+                    </button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -153,6 +180,33 @@ export default function Courses() {
           onAction={() => setOpen(true)}
         />
       )}
+
+      <Dialog open={pendingDelete !== null} onOpenChange={(next) => !next && setPendingDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove {pendingDelete?.courseCode}?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes <span className="font-medium text-foreground">{pendingDelete?.courseName}</span> and
+              everything filed under it — syllabi, question papers and their questions, analysis reports, marking schemes,
+              lecture plans, teaching materials and Copilot threads. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-small text-muted-foreground">
+            Timetable entries are kept, but they lose their link to this course.
+          </p>
+          {deleteError && <p className="text-small font-medium text-error">{deleteError}</p>}
+          <div className="mt-2 flex justify-end gap-2">
+            <DialogClose asChild>
+              <Button type="button" variant="outline" size="sm" disabled={deleteCourse.isPending}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button type="button" size="sm" onClick={handleDelete} disabled={deleteCourse.isPending}>
+              {deleteCourse.isPending ? "Removing..." : "Remove course"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

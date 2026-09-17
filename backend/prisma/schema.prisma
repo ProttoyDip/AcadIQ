@@ -40,6 +40,11 @@ model User {
   email               String               @unique @db.VarChar(191)
   password            String               @db.VarChar(255)
   role                Role                 @default(FACULTY)
+  digestEnabled       Boolean              @default(false) @map("digest_enabled")
+  digestHour          Int                  @default(7) @map("digest_hour")
+  digestLastSent      String?              @map("digest_last_sent") @db.Char(10)
+  /// IANA zone (e.g. Asia/Dhaka); null = server local. Drives the digest hour and "today".
+  timezone            String?              @db.VarChar(60)
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
   facultyProfile      FacultyProfile?
@@ -51,8 +56,10 @@ model User {
   copilotThreads      CopilotThread[]
   chatSessions        ChatSession[]
   questionFeedback    QuestionFeedback[]
+  terms               Term[]
   aiDocuments         Document[]
   generatedQuestions  GeneratedQuestion[]
+  departmentRoutines  DepartmentRoutine[]
 
   @@map("users")
 }
@@ -85,6 +92,11 @@ model Course {
   courseOutcomes    CourseOutcome[]
   copilotThreads    CopilotThread[]
   chatSessions      ChatSession[]
+  blueprint         ExamBlueprint?
+  lecturePlans      LecturePlan[]
+  classSlots        ClassSlot[]
+  classSessions     ClassSession[]
+  calendarEvents    CalendarEvent[]
 
   @@unique([facultyId, courseCode])
   @@index([facultyId])
@@ -170,9 +182,188 @@ model QuestionPaper {
   questions    Question[]
   reports      AnalysisReport[]
   chatSessions ChatSession[]
+  studentMarks StudentMark[]
+  rubrics      Rubric[]
 
   @@index([courseId, uploadedAt])
   @@map("question_papers")
+}
+
+/// Per-student, per-question marks uploaded after an exam. Deterministic item analysis and CO
+/// attainment are computed from these rows; a re-upload replaces the paper's whole set.
+model StudentMark {
+  id                Int           @id @default(autoincrement())
+  paperId           Int           @map("paper_id")
+  questionId        Int           @map("question_id")
+  studentIdentifier String        @map("student_identifier") @db.VarChar(100)
+  marks             Decimal       @db.Decimal(7, 2)
+  createdAt         DateTime      @default(now()) @map("created_at")
+  paper             QuestionPaper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  question          Question      @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([paperId, studentIdentifier, questionId])
+  @@index([questionId])
+  @@map("student_marks")
+}
+
+/// Faculty's own target distribution for a course; analyses report deviation from this instead of a generic ideal.
+model ExamBlueprint {
+  id             Int      @id @default(autoincrement())
+  courseId       Int      @unique @map("course_id")
+  targetBloom    Json     @map("target_bloom")
+  outcomeWeights Json?    @map("outcome_weights")
+  topicWeights   Json?    @map("topic_weights")
+  totalMarks     Int      @default(100) @map("total_marks")
+  questionCount  Int      @default(8) @map("question_count")
+  notes          String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  course         Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@map("exam_blueprints")
+}
+
+model LecturePlan {
+  id        Int      @id @default(autoincrement())
+  courseId  Int      @map("course_id")
+  weeks     Int
+  hoursPerWeek Int   @map("hours_per_week")
+  planJson  Json     @map("plan_json")
+  createdAt DateTime @default(now()) @map("created_at")
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, createdAt])
+  @@map("lecture_plans")
+}
+
+/// Timetable: dates are `YYYY-MM-DD`, times `HH:MM` local — no timezone maths anywhere.
+model Term {
+  id        Int             @id @default(autoincrement())
+  facultyId Int             @map("faculty_id")
+  name      String          @db.VarChar(80)
+  startDate String          @map("start_date") @db.Char(10)
+  endDate   String          @map("end_date") @db.Char(10)
+  isActive  Boolean         @default(true) @map("is_active")
+  /// Secret for the public read-only .ics feed; null until the faculty asks for a subscribe link.
+  feedToken String?         @unique @map("feed_token") @db.Char(48)
+  createdAt DateTime        @default(now()) @map("created_at")
+  faculty   User            @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  slots     ClassSlot[]
+  sessions  ClassSession[]
+  events    CalendarEvent[]
+
+  @@index([facultyId, isActive])
+  @@map("terms")
+}
+
+/// Weekly template row from the routine (one line of the department timetable).
+model ClassSlot {
+  id          Int            @id @default(autoincrement())
+  termId      Int            @map("term_id")
+  courseId    Int?           @map("course_id")
+  courseLabel String         @map("course_label") @db.VarChar(120)
+  section     String?        @db.VarChar(40)
+  dayOfWeek   Int            @map("day_of_week") // 0 = Sunday … 6 = Saturday
+  startTime   String         @map("start_time") @db.Char(5)
+  endTime     String         @map("end_time") @db.Char(5)
+  room        String?        @db.VarChar(60)
+  kind        String         @default("LECTURE") @db.VarChar(20) // LECTURE | LAB | TUTORIAL | OFFICE_HOUR | OTHER
+  source      String         @default("MANUAL") @db.VarChar(20) // MANUAL | AI_IMPORT
+  createdAt   DateTime       @default(now()) @map("created_at")
+  term        Term           @relation(fields: [termId], references: [id], onDelete: Cascade)
+  course      Course?        @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  sessions    ClassSession[]
+
+  @@index([termId, dayOfWeek])
+  @@map("class_slots")
+}
+
+/// One dated occurrence. Generated from slots, then edited in place (cancel / reschedule / log).
+model ClassSession {
+  id                Int           @id @default(autoincrement())
+  termId            Int           @map("term_id")
+  slotId            Int?          @map("slot_id")
+  courseId          Int?          @map("course_id")
+  courseLabel       String        @map("course_label") @db.VarChar(120)
+  section           String?       @db.VarChar(40)
+  date              String        @db.Char(10)
+  startTime         String        @map("start_time") @db.Char(5)
+  endTime           String        @map("end_time") @db.Char(5)
+  room              String?       @db.VarChar(60)
+  kind              String        @default("LECTURE") @db.VarChar(20)
+  status            String        @default("SCHEDULED") @db.VarChar(20) // SCHEDULED | HELD | CANCELLED | RESCHEDULED | HOLIDAY | MAKEUP
+  reason            String?       @db.VarChar(255)
+  rescheduledFromId Int?          @unique @map("rescheduled_from_id")
+  plannedWeek       Int?          @map("planned_week")
+  plannedTopics     Json?         @map("planned_topics")
+  coveredTopics     Json?         @map("covered_topics")
+  notes             String?       @db.Text
+  materialIds       Json?         @map("material_ids")
+  loggedAt          DateTime?     @map("logged_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  term              Term          @relation(fields: [termId], references: [id], onDelete: Cascade)
+  slot              ClassSlot?    @relation(fields: [slotId], references: [id], onDelete: SetNull)
+  course            Course?       @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  rescheduledFrom   ClassSession? @relation("Reschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
+  rescheduledTo     ClassSession? @relation("Reschedule")
+
+  @@index([termId, date])
+  @@index([courseId, date])
+  @@map("class_sessions")
+}
+
+/// Holidays, exam weeks, deadlines and assessments (quiz/mid/final) that block or annotate days.
+model CalendarEvent {
+  id        Int      @id @default(autoincrement())
+  termId    Int      @map("term_id")
+  courseId  Int?     @map("course_id")
+  section   String?  @db.VarChar(40)
+  date      String   @db.Char(10)
+  endDate   String?  @map("end_date") @db.Char(10)
+  startTime String?  @map("start_time") @db.Char(5)
+  endTime   String?  @map("end_time") @db.Char(5)
+  kind      String   @db.VarChar(20) // HOLIDAY | EXAM_WEEK | DEADLINE | ASSESSMENT | OTHER
+  title     String   @db.VarChar(160)
+  source    String   @default("MANUAL") @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at")
+  term      Term     @relation(fields: [termId], references: [id], onDelete: Cascade)
+  course    Course?  @relation(fields: [courseId], references: [id], onDelete: SetNull)
+
+  @@index([termId, date])
+  @@map("calendar_events")
+}
+
+/// Department-wide timetable uploaded by an admin; powers free-room lookup and section clash checks.
+model DepartmentRoutine {
+  id           Int              @id @default(autoincrement())
+  uploadedById Int              @map("uploaded_by_id")
+  termLabel    String           @map("term_label") @db.VarChar(80)
+  originalName String           @map("original_name") @db.VarChar(255)
+  slotCount    Int              @default(0) @map("slot_count")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  uploadedBy   User             @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  slots        DepartmentSlot[]
+
+  @@map("department_routines")
+}
+
+model DepartmentSlot {
+  id          Int               @id @default(autoincrement())
+  routineId   Int               @map("routine_id")
+  courseLabel String            @map("course_label") @db.VarChar(120)
+  section     String?           @db.VarChar(40)
+  teacher     String?           @db.VarChar(80)
+  dayOfWeek   Int               @map("day_of_week")
+  startTime   String            @map("start_time") @db.Char(5)
+  endTime     String            @map("end_time") @db.Char(5)
+  room        String?           @db.VarChar(60)
+  kind        String            @default("LECTURE") @db.VarChar(20)
+  routine     DepartmentRoutine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  @@index([routineId, dayOfWeek])
+  @@index([room])
+  @@map("department_slots")
 }
 
 model Question {
@@ -188,6 +379,7 @@ model Question {
   coMappings     QuestionCOMapping[]
   historyEntry   QuestionHistory?
   feedback       QuestionFeedback[]
+  studentMarks   StudentMark[]
 
   @@unique([paperId, sequenceNumber])
   @@index([paperId])
@@ -418,20 +610,23 @@ model QuestionCOMapping {
 }
 
 model Rubric {
-  id          Int             @id @default(autoincrement())
-  courseId    Int             @map("course_id")
-  createdById Int             @map("created_by_id")
-  name        String          @db.VarChar(160)
-  description String?         @db.Text
-  criteria    Json
-  maxScore    Decimal         @map("max_score") @db.Decimal(7, 2)
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
-  course      Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  createdBy   User            @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  answers     StudentAnswer[]
+  id              Int             @id @default(autoincrement())
+  courseId        Int             @map("course_id")
+  questionPaperId Int?            @map("question_paper_id")
+  createdById     Int             @map("created_by_id")
+  name            String          @db.VarChar(160)
+  description     String?         @db.Text
+  criteria        Json
+  maxScore        Decimal         @map("max_score") @db.Decimal(7, 2)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  course          Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questionPaper   QuestionPaper?  @relation(fields: [questionPaperId], references: [id], onDelete: SetNull)
+  createdBy       User            @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  answers         StudentAnswer[]
 
   @@index([courseId])
+  @@index([questionPaperId])
   @@index([createdById])
   @@map("rubrics")
 }

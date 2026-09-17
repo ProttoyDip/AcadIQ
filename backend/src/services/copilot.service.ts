@@ -3,10 +3,10 @@ import { identifyIntent } from "./copilot/retrieval.service";
 import { assembleContext } from "./copilot/context.service";
 import { buildCopilotSystemPrompt } from "./copilot/prompt.service";
 import { generateCopilotResponse } from "./copilot/response.service";
-import { ChatMessage } from "../ai/llmClient";
+import { callLlmTranscription, ChatMessage } from "../ai/llmClient";
 import { auditService } from "./audit.service";
 import { AppError } from "../middleware/error.middleware";
-import { CopilotChatRequest } from "../validators/copilot.validator";
+import { CopilotChatRequest, CopilotVoiceRequest } from "../validators/copilot.validator";
 
 /**
  * Faculty question → identify intent → retrieve relevant AcadIQ data → build
@@ -101,6 +101,29 @@ export const copilotService = {
       retrieval: context.retrieval,
       createdAt: savedAssistantMessage.createdAt,
     };
+  },
+
+  /**
+   * Voice turn: transcribe, then run the ordinary chat path. Everything that
+   * makes the Copilot trustworthy — retrieval, grounding, PII redaction, session
+   * persistence, the audit trail — lives in `chat`, so voice deliberately adds
+   * no second pipeline. The transcript is returned alongside the answer so the
+   * faculty member can see what was heard; misheard questions are the most
+   * common failure of voice input, and a wrong answer to a misheard question is
+   * indistinguishable from a bad answer unless the transcript is visible.
+   */
+  async voice(userId: number, input: CopilotVoiceRequest, audio: { buffer: Buffer; filename: string; mimeType: string }) {
+    const transcript = await callLlmTranscription(audio, { language: input.language });
+
+    // Whisper emits filler ("you", "Thank you.") for near-silent clips, which
+    // would otherwise become a real question and a billed LLM call.
+    const cleaned = transcript.trim();
+    if (cleaned.length < 2 || /^(you|thanks?|thank you|uh+|um+)[.!?]*$/i.test(cleaned)) {
+      throw new AppError("No question was heard in that recording. Try again, a little closer to the microphone.", 422, { transcript: cleaned });
+    }
+
+    const result = await this.chat(userId, { ...input, message: cleaned });
+    return { ...result, transcript: cleaned };
   },
 
   async getSession(userId: number, sessionId: number) {

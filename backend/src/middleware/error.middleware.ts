@@ -24,6 +24,12 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     return failure(res, "Request validation failed", 422, err.flatten());
   }
 
+  // express.json() rejects an unparsable body with a SyntaxError carrying
+  // status 400 and the raw `body`; without this it fell through to a 500.
+  if (err instanceof SyntaxError && "body" in err && (err as { status?: number }).status === 400) {
+    return failure(res, "Malformed JSON in request body", 400);
+  }
+
   if (err instanceof multer.MulterError) {
     const message = err.code === "LIMIT_FILE_SIZE" ? "File exceeds the size limit" : err.code === "LIMIT_FILE_COUNT" ? "Too many files in one upload" : err.message;
     return failure(res, message, 400);

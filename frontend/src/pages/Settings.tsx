@@ -11,6 +11,8 @@ import { ThemeToggle } from "../components/ui/ThemeToggle";
 import { useTheme } from "../context/ThemeContext";
 import { Sun, Moon, Monitor } from "lucide-react";
 import { cn } from "../lib/utils";
+import DigestSettingsCard from "../components/schedule/DigestSettingsCard";
+import AiModelSelector from "../components/ai/AiModelSelector";
 
 function initials(name?: string) {
   if (!name) return "FA";
@@ -29,6 +31,18 @@ export default function Settings() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Settings" description="Manage your AcadIQ profile and preferences." />
+
+      {user?.role === "FACULTY" && <DigestSettingsCard />}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-body font-semibold">AI model preferences</CardTitle>
+          <CardDescription>Choose a model or let AcadIQ switch between available providers.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AiModelSelector />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

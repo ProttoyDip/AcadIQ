@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { VoiceInput, appendTranscript } from "./ui/voice-input";
 import { useDropzone } from 'react-dropzone';
 import { 
   Sparkles, 
@@ -668,6 +669,7 @@ ${allModelResults.map(({ spec, data }) => `[${spec.shortName}] (${data.assigned_
               <div className="md:col-span-3 space-y-2">
                 <Label htmlFor="exam-question" className="text-xs font-semibold uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5 text-primary" /> Exam Question
+                  <VoiceInput label="the exam question" className="ml-auto" onTranscript={(t) => setQuestion((v) => appendTranscript(v, t))} />
                 </Label>
                 <Input
                   id="exam-question"
@@ -744,14 +746,17 @@ ${allModelResults.map(({ spec, data }) => `[${spec.shortName}] (${data.assigned_
                       placeholder="Paste reference model answer or key rubric concepts..."
                     />
                     <div className="flex items-center justify-between mt-1.5 text-xs text-muted-foreground px-1">
-                      <span>{modelAnswer.trim() ? `${modelAnswer.trim().split(/\s+/).length} words` : "No text entered"}</span>
-                      <button
-                        type="button"
-                        onClick={() => setReferenceMode('file')}
-                        className="text-primary hover:underline flex items-center gap-1 font-medium cursor-pointer"
-                      >
-                        <FileUp className="w-3.5 h-3.5" /> Upload file instead (PDF / Word / Text)
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <span>{modelAnswer.trim() ? `${modelAnswer.trim().split(/\s+/).length} words` : "No text entered"}</span>
+                        <button
+                          type="button"
+                          onClick={() => setReferenceMode('file')}
+                          className="text-primary hover:underline flex items-center gap-1 font-medium cursor-pointer"
+                        >
+                          <FileUp className="w-3.5 h-3.5" /> Upload file instead (PDF / Word / Text)
+                        </button>
+                      </div>
+                      <VoiceInput label="the reference answer" onTranscript={(t) => setModelAnswer((v) => appendTranscript(v, t))} />
                     </div>
                   </div>
                 ) : (
@@ -874,6 +879,7 @@ ${allModelResults.map(({ spec, data }) => `[${spec.shortName}] (${data.assigned_
                         Upload File
                       </button>
                     </div>
+                    <VoiceInput label="the student answer" onTranscript={(t) => setStudentAnswer((v) => appendTranscript(v, t))} />
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border">
                       {studentMode === 'file' ? (studentFile ? 'File Attached' : 'Upload') : 'Submission'}
                     </span>

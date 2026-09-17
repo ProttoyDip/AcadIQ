@@ -3,17 +3,22 @@ import { motion } from "framer-motion";
 import { GraduationCap, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useUiStore } from "../../store/uiStore";
-import { navGroups } from "./navigation";
+import { navGroupsFor } from "./navigation";
+import { useAuth } from "../../hooks/useAuth";
 
 
 
 export default function Sidebar() {
   const { sidebarCollapsed, toggleSidebar } = useUiStore();
+  const { user } = useAuth();
+  const navGroups = navGroupsFor(user?.role);
 
   return (
     <aside
       className={cn(
-        "hidden shrink-0 select-none flex-col border-r border-border bg-card transition-[width] duration-300 ease-out md:flex",
+        // sticky + h-dvh keeps the rail in place even if an overflowing child
+        // ever manages to scroll an ancestor; the nav inside scrolls on its own.
+        "sticky top-0 hidden h-dvh shrink-0 select-none flex-col border-r border-border bg-card transition-[width] duration-300 ease-out md:flex",
         sidebarCollapsed ? "w-[76px]" : "w-64"
       )}
     >
@@ -62,7 +67,11 @@ export default function Sidebar() {
                       <motion.span
                         layoutId="sidebar-active"
                         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                        className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-primary"
+                        // Centred with auto margins, not -translate-y-1/2: layoutId makes
+                        // framer-motion own `transform` for the FLIP animation, and its
+                        // inline value overwrites a translate class, dropping the bar 12px
+                        // (half its height) below centre on every item it animates to.
+                        className="absolute inset-y-0 left-0 my-auto h-6 w-1 rounded-r-full bg-primary"
                         aria-hidden="true"
                       />
                     )}

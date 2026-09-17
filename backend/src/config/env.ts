@@ -32,6 +32,13 @@ const groqApiKey = process.env.GROQ_API_KEY;
 const openAiApiKey = groqApiKey || process.env.OPENAI_API_KEY || "";
 const isGroq = Boolean(groqApiKey) || openAiApiKey.startsWith("gsk_");
 
+const openAiBaseUrl =
+  process.env.OPENAI_BASE_URL ??
+  (isGroq ? "https://api.groq.com/openai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions");
+// Same provider, different endpoint — derived so a self-hosted OpenAI-compatible
+// server only needs OPENAI_BASE_URL set, not a second variable.
+const speechBaseUrl = process.env.SPEECH_BASE_URL ?? openAiBaseUrl.replace(/\/chat\/completions\/?$/, "/audio/transcriptions");
+
 export const env = {
   nodeEnv,
   port: positiveInteger("PORT", 5000),
@@ -40,12 +47,26 @@ export const env = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
   groqApiKey: groqApiKey ?? "",
+  /** Externally reachable API origin for links in emails and calendar feeds. */
+  apiPublicUrl: (process.env.API_PUBLIC_URL ?? `http://localhost:${positiveInteger("PORT", 5000)}`).replace(/\/$/, ""),
   openAiApiKey,
-  openAiBaseUrl:
-    process.env.OPENAI_BASE_URL ??
-    (isGroq ? "https://api.groq.com/openai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions"),
-  openAiModel: process.env.OPENAI_MODEL ?? (isGroq ? "llama-3.3-70b-versatile" : "gpt-4o-mini"),
-  dualEvalSecondaryModel: process.env.DUAL_EVAL_SECONDARY_MODEL ?? (isGroq ? "llama-3.1-8b-instant" : "gpt-4o"),
+  openAiBaseUrl,
+  openAiModel: process.env.OPENAI_MODEL ?? (isGroq ? "openai/gpt-oss-120b" : "gpt-4o-mini"),
+  // Second, different-vendor model for the Dual Evaluator so its consensus is a real cross-check.
+  dualEvalSecondaryModel: process.env.DUAL_EVAL_SECONDARY_MODEL ?? (isGroq ? "qwen/qwen3.8-27b" : "gpt-4o"),
+  /** Image-capable model used to transcribe photographed routines. Empty string disables image import. */
+  visionModel: process.env.VISION_MODEL ?? (isGroq ? "qwen/qwen3.8-27b" : "gpt-4o-mini"),
+  /**
+   * Speech-to-text model for the voice Copilot. Whisper is used rather than the
+   * browser's Web Speech API because faculty here dictate in Bengali and
+   * Bangla-accented English, which the browser engines transcribe poorly.
+   * Empty string disables voice input.
+   */
+  speechModel: process.env.SPEECH_MODEL ?? (isGroq ? "whisper-large-v3-turbo" : "whisper-1"),
+  speechBaseUrl,
+  /** Upper bound on an uploaded voice clip. Whisper bills by audio length, and a
+   * runaway recording is the only way this route can cost real money. */
+  maxSpeechSeconds: positiveInteger("MAX_SPEECH_SECONDS", 120),
   aiTimeoutMs: positiveInteger("AI_TIMEOUT_MS", 45_000),
   maxAiInputChars: positiveInteger("MAX_AI_INPUT_CHARS", 80_000),
   /** Syllabus text is truncated to this many characters before entering any prompt (Groq free tier: ~8k tokens/request). */
@@ -81,6 +102,20 @@ export const env = {
     textModel: process.env.OLLAMA_TEXT_MODEL ?? "gemma3:4b",
     visionModel: process.env.OLLAMA_VISION_MODEL ?? "qwen2.5vl:3b",
     embeddingModel: process.env.OLLAMA_EMBEDDING_MODEL ?? "nomic-embed-text",
+    /**
+     * Layers to offload to the GPU. `null` (unset) lets Ollama decide; `0` forces
+     * CPU inference. 0 is the only correct setting where Ollama's Vulkan/ROCm path
+     * loads the model but returns corrupt logits — the model emits random glyphs,
+     * then repeats one unused token until llama-server aborts. Correct output on
+     * CPU costs speed, not accuracy.
+     */
+    numGpu: (() => {
+      const raw = process.env.OLLAMA_NUM_GPU;
+      if (raw === undefined || raw.trim() === "") return null;
+      const value = Number(raw);
+      if (!Number.isInteger(value) || value < 0) throw new Error("OLLAMA_NUM_GPU must be a non-negative integer");
+      return value;
+    })(),
     timeoutMs: positiveInteger("OLLAMA_TIMEOUT_MS", 120_000),
   },
 };

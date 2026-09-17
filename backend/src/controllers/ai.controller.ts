@@ -13,6 +13,7 @@ import { imageAnalysisService } from "../services/vision/imageAnalysis.service";
 import { courseParserService } from "../services/question/courseParser.service";
 import { questionGeneratorService } from "../services/question/questionGenerator.service";
 import { ollamaService } from "../services/ollama/ollama.service";
+import { getModelCatalog } from "../ai/providers";
 import {
   pdfSummarizeSchema,
   pdfAskSchema,
@@ -27,6 +28,18 @@ async function unlinkSafely(path?: string) {
 }
 
 export const aiController = {
+  /**
+   * Allowlisted chat model catalogue for the model picker. Credentials and
+   * endpoints stay server-side; only provider/model identifiers are returned.
+   */
+  async listModels(_req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      return success(res, getModelCatalog());
+    } catch (error) {
+      next(error);
+    }
+  },
+
   /**
    * Check Ollama status and model readiness.
    */
@@ -377,6 +390,154 @@ export const aiController = {
           questionCount: d._count.questions,
         }))
       );
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * List generated questions history for the user.
+   */
+  async getQuestionsHistory(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const documentId = req.query.documentId ? Number(req.query.documentId) : undefined;
+      const type = typeof req.query.type === "string" && req.query.type ? req.query.type : undefined;
+      const difficulty = typeof req.query.difficulty === "string" && req.query.difficulty ? req.query.difficulty : undefined;
+      const search = typeof req.query.search === "string" && req.query.search.trim() ? req.query.search.trim() : undefined;
+      const limit = req.query.limit ? Math.min(Number(req.query.limit), 100) : 50;
+
+      const where: any = {};
+      if (req.user?.userId) {
+        where.OR = [
+          { userId: req.user.userId },
+          { document: { userId: req.user.userId } },
+          { userId: null },
+        ];
+      }
+      if (documentId) where.documentId = documentId;
+      if (type) where.type = type;
+      if (difficulty) where.difficulty = difficulty;
+      if (search) {
+        where.AND = [
+          ...(where.AND || []),
+          {
+            OR: [
+              { question: { contains: search } },
+              { topic: { contains: search } },
+            ],
+          },
+        ];
+      }
+
+      const questions = await prisma.generatedQuestion.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        include: {
+          document: {
+            select: { id: true, title: true, originalName: true },
+          },
+        },
+      });
+
+      return success(res, questions);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * Delete a generated question.
+   */
+  async deleteQuestion(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const id = Number(req.params.id);
+      if (!id || Number.isNaN(id)) {
+        throw new AppError("Invalid question ID", 400);
+      }
+
+      const q = await prisma.generatedQuestion.findUnique({
+        where: { id },
+        include: { document: { select: { userId: true } } },
+      });
+
+      if (!q) {
+        throw new AppError("Question not found", 404);
+      }
+
+      if (req.user?.userId && q.userId && q.userId !== req.user.userId && q.document?.userId !== req.user.userId) {
+        throw new AppError("You do not have permission to delete this question", 403);
+      }
+
+      await prisma.generatedQuestion.delete({ where: { id } });
+      return success(res, { deleted: true, questionId: id });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * Aggregated AI history and overview stats for the user.
+   */
+  async getAiHistoryOverview(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const userFilter = req.user?.userId ? { userId: req.user.userId } : undefined;
+
+      const [totalDocuments, totalQuestions, documentsWithSummary] = await Promise.all([
+        prisma.document.count({ where: userFilter }),
+        prisma.generatedQuestion.count({
+          where: req.user?.userId
+            ? {
+                OR: [
+                  { userId: req.user.userId },
+                  { document: { userId: req.user.userId } },
+                ],
+              }
+            : undefined,
+        }),
+        prisma.document.findMany({
+          where: {
+            ...(userFilter || {}),
+            summary: { not: null },
+          },
+          select: {
+            id: true,
+            title: true,
+            originalName: true,
+            summary: true,
+            keyPoints: true,
+            createdAt: true,
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 10,
+        }),
+      ]);
+
+      const recentQuestions = await prisma.generatedQuestion.findMany({
+        where: req.user?.userId
+          ? {
+              OR: [
+                { userId: req.user.userId },
+                { document: { userId: req.user.userId } },
+              ],
+            }
+          : undefined,
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        include: {
+          document: {
+            select: { id: true, title: true },
+          },
+        },
+      });
+
+      return success(res, {
+        totalDocuments,
+        totalQuestions,
+        readySummariesCount: documentsWithSummary.length,
+        documentsWithSummary,
+        recentQuestions,
+      });
     } catch (error) {
       next(error);
     }

@@ -15,6 +15,9 @@ import UploadAnalysis from "./pages/UploadAnalysis";
 import AnalysisReport from "./pages/AnalysisReport";
 import QuestionMemory from "./pages/QuestionMemory";
 import PaperGenerator from "./pages/PaperGenerator";
+import QuestionBank from "./pages/QuestionBank";
+import Schedule from "./pages/Schedule";
+import AdminDepartmentRoutine from "./pages/AdminDepartmentRoutine";
 import Settings from "./pages/Settings";
 import DualEvaluatorPage from "./pages/DualEvaluatorPage";
 import AdminUsers from "./pages/AdminUsers";
@@ -54,6 +57,8 @@ export default function App() {
             <Route path="/reports/:id" element={<AnalysisReport />} />
             <Route path="/question-memory" element={<QuestionMemory />} />
             <Route path="/paper-generator" element={<PaperGenerator />} />
+            <Route path="/question-bank" element={<QuestionBank />} />
+            <Route path="/schedule" element={<Schedule />} />
             <Route path="/dual-evaluate" element={<DualEvaluatorPage />} />
             <Route path="/ai" element={<AiHub />} />
             <Route path="/ai/pdf" element={<PdfAssistant />} />
@@ -66,6 +71,7 @@ export default function App() {
         <Route element={<ProtectedRoute role="ADMIN" />}>
           <Route element={<AppShell />}>
             <Route path="/admin/users" element={<AdminUsers />} />
+            <Route path="/admin/routine" element={<AdminDepartmentRoutine />} />
           </Route>
         </Route>
 

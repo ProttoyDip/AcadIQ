@@ -1,6 +1,9 @@
 import { env } from "../config/env";
 import { AppError } from "../middleware/error.middleware";
 import { logger } from "../utils/logger";
+import { getAiProviders, getVisionCandidates, ResolvedAiModel } from "./providers";
+import { publicAiModel, resolveChatSelection } from "./modelRouting";
+import { currentAiSelection, recordAiModel } from "./modelContext";
 
 /**
  * Thin wrapper around the LLM provider. Kept provider-agnostic (OpenAI-compatible
@@ -50,8 +53,11 @@ interface ProviderFailure {
 export async function classifyFailure(response: Response): Promise<ProviderFailure> {
   let detail = "";
   try {
-    const body = (await response.json()) as { error?: { message?: string } | string };
-    detail = typeof body.error === "string" ? body.error : body.error?.message ?? "";
+    const body = (await response.json()) as { error?: { message?: string; code?: string | number } | string };
+    // The machine-readable `code` is kept alongside the prose: providers signal an
+    // exhausted account as code "insufficient_quota" with a message that need not
+    // contain any quota wording, and routing has to see both to fail over.
+    detail = typeof body.error === "string" ? body.error : [body.error?.message, body.error?.code].filter(Boolean).join(" ");
   } catch {
     detail = "";
   }
@@ -86,64 +92,160 @@ export async function classifyFailure(response: Response): Promise<ProviderFailu
   return { message: `AI provider returned HTTP ${response.status}`, retryable: response.status >= 500, retryAfterMs: null, detail };
 }
 
-export async function callLlmChat(messages: ChatMessage[]): Promise<string> {
-  if (!env.openAiApiKey) {
-    throw new AppError("AI provider is not configured (GROQ_API_KEY or OPENAI_API_KEY missing)", 503);
-  }
+export async function callLlmChat(messages: ChatMessage[], options: LlmCallOptions = {}): Promise<string> {
+  return (await routedCompletion(messages, { ...options, maxTokens: 2048 })).raw.trim();
+}
 
-  let lastFailure = "AI copilot request failed";
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+/**
+ * One image + instruction → text, via the OpenAI-compatible `image_url` content part.
+ * Used to transcribe photographed timetables before the normal text pipeline runs.
+ */
+export async function callLlmVision(image: { mimeType: string; base64: string }, instruction: string, options: { maxTokens?: number } = {}): Promise<string> {
+  const candidates = visionCandidatesForRequest();
+  if (!candidates.length) {
+    throw new AppError("Image reading is not configured on this server (no image-capable AI model is available)", 503);
+  }
+  const messages = [{
+    role: "user",
+    content: [
+      { type: "text", text: instruction },
+      { type: "image_url", image_url: { url: `data:${image.mimeType};base64,${image.base64}` } },
+    ],
+  }];
+  const deadline = Date.now() + env.aiTimeoutMs;
+  let lastFailure = "No configured AI model could read this image";
+
+  for (const candidate of candidates) {
+    const { provider, model } = candidate;
+    const cooldownKey = `${provider.id}:${provider.baseUrl}`;
+    if (candidates.length > 1 && (providerCooldowns.get(cooldownKey) ?? 0) > Date.now()) continue;
+    if (Date.now() >= deadline) break;
+
     let response: Response;
     try {
-      response = await fetch(env.openAiBaseUrl, {
+      response = await fetch(provider.baseUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${env.openAiApiKey}`,
-        },
-        body: JSON.stringify({
-          model: env.openAiModel,
-          messages,
-          temperature: 0.3,
-          max_tokens: 2048,
-        }),
-        signal: AbortSignal.timeout(env.aiTimeoutMs),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${provider.apiKey}` },
+        body: JSON.stringify({ model, messages, temperature: 0.1, max_tokens: options.maxTokens ?? 4096 }),
+        signal: AbortSignal.timeout(Math.max(1000, Math.min(deadline - Date.now(), Math.floor(env.aiTimeoutMs / candidates.length)))),
       });
-    } catch (error) {
+    } catch {
       lastFailure = "AI provider is unavailable";
-      if (attempt === 2) {
-        logger.error("llm_copilot_transport_failed", { error: error instanceof Error ? error.message : String(error) });
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt)));
+      providerCooldowns.set(cooldownKey, Date.now() + 5_000);
       continue;
     }
 
     if (!response.ok) {
       const failure = await classifyFailure(response);
       lastFailure = failure.message;
-      logger.warn("llm_copilot_request_attempt_failed", { attempt: attempt + 1, statusCode: response.status, retryable: failure.retryable });
-      if (!failure.retryable) break;
-      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, response, failure.retryAfterMs)));
+      logger.warn("llm_vision_attempt_failed", { provider: provider.id, model, statusCode: response.status });
+      // An oversized image is refused by every provider, so retrying elsewhere only
+      // re-uploads it. Every other failure is worth trying on the next account.
+      if (response.status === 413) throw new AppError(failure.message, 413);
+      providerCooldowns.set(cooldownKey, Date.now() + (response.status === 429 ? 30_000 : 10_000));
       continue;
-    } else {
+    }
+
+    try {
+      const body = (await response.json()) as ChatCompletionBody;
+      const content = body?.choices?.[0]?.message?.content;
+      if (typeof content === "string" && content.trim()) {
+        const actualModel = typeof body.model === "string" && body.model.trim() ? body.model.trim() : model;
+        const actual = { ...candidate, model: actualModel, id: `${provider.id}:${actualModel}` };
+        providerCooldowns.delete(cooldownKey);
+        recordAiModel(publicAiModel(actual), candidate.id !== candidates[0].id);
+        return content.trim();
+      }
+      lastFailure = "AI provider returned an empty response";
+    } catch {
+      lastFailure = "AI provider returned an unreadable response";
+    }
+  }
+
+  logger.error("llm_vision_failed", { reason: lastFailure });
+  throw new AppError(lastFailure, 502);
+}
+
+/**
+ * The pinned model when it can actually see images, otherwise every image-capable
+ * model in provider order. A model chosen for chat is ignored here unless it is
+ * also in a provider's visionModels list — handing an image to a text-only model
+ * just produces a provider rejection.
+ */
+function visionCandidatesForRequest(): ResolvedAiModel[] {
+  const all = getVisionCandidates();
+  const scope = currentAiSelection();
+  const pinned = scope && scope.modelId !== "auto" ? all.find((candidate) => candidate.id === scope.modelId) : undefined;
+  if (!pinned) return all;
+  return scope!.allowFallback ? [pinned, ...all.filter((candidate) => candidate.id !== pinned.id)] : [pinned];
+}
+
+/**
+ * Audio → text via the OpenAI-compatible /audio/transcriptions endpoint (Groq
+ * serves Whisper there). Deliberately NOT the browser's Web Speech API: faculty
+ * here dictate in Bengali and Bangla-accented English, which the browser engines
+ * transcribe badly, and Web Speech is Chrome-only.
+ *
+ * Retries transport failures and rate limits the same way the chat router does,
+ * but never retries a rejected file — a clip the provider refuses once will be
+ * refused again, and each attempt re-uploads the whole payload.
+ */
+export async function callLlmTranscription(
+  audio: { buffer: Buffer; filename: string; mimeType: string },
+  options: { language?: string } = {}
+): Promise<string> {
+  if (!env.openAiApiKey) throw new AppError("AI provider is not configured (GROQ_API_KEY or OPENAI_API_KEY missing)", 503);
+  if (!env.speechModel) throw new AppError("Voice input is disabled on this server (SPEECH_MODEL is empty)", 400);
+
+  let lastFailure = "Voice transcription failed";
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const form = new FormData();
+    form.append("file", new Blob([new Uint8Array(audio.buffer)], { type: audio.mimeType }), audio.filename);
+    form.append("model", env.speechModel);
+    form.append("response_format", "json");
+    // Left unset by default: forcing a language makes Whisper mistranscribe the
+    // other one, and faculty here mix Bengali and English in a single sentence.
+    if (options.language) form.append("language", options.language);
+
+    let response: Response;
+    try {
+      response = await fetch(env.speechBaseUrl, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${env.openAiApiKey}` },
+        body: form,
+        signal: AbortSignal.timeout(env.aiTimeoutMs),
+      });
+    } catch (error) {
+      lastFailure = "AI provider is unavailable";
+      if (attempt === 2) {
+        logger.error("llm_transcription_transport_failed", { error: error instanceof Error ? error.message : String(error) });
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt)));
+      continue;
+    }
+
+    if (response.ok) {
       try {
-        const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
-        const content = body?.choices?.[0]?.message?.content;
-        if (!content) {
-          lastFailure = "AI provider returned an empty response";
-        } else {
-          return content.trim();
-        }
+        const body = (await response.json()) as { text?: string };
+        const text = (body.text ?? "").trim();
+        if (text) return text;
+        lastFailure = "No speech was detected in the recording";
+        break; // A silent clip is a user problem; retrying re-bills the same silence.
       } catch {
-        lastFailure = "AI provider returned an unreadable response";
+        lastFailure = "AI provider returned an unreadable transcription";
+        break;
       }
     }
 
-    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, response)));
+    const failure = await classifyFailure(response);
+    lastFailure = failure.message;
+    logger.warn("llm_transcription_attempt_failed", { attempt: attempt + 1, statusCode: response.status, retryable: failure.retryable });
+    if (!failure.retryable) break;
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, response, failure.retryAfterMs)));
   }
 
-  logger.error("llm_copilot_failed", { reason: lastFailure });
+  logger.error("llm_transcription_failed", { reason: lastFailure });
   throw new AppError(lastFailure, 502);
 }
 
@@ -153,109 +255,23 @@ export async function callLlmChat(messages: ChatMessage[]): Promise<string> {
  * Copilot, which must return structured {answer, reasoning, confidence} JSON
  * while still carrying prior turns for context.
  */
-export async function callLlmChatJson<T>(messages: ChatMessage[]): Promise<T> {
-  if (!env.openAiApiKey) {
-    throw new AppError("AI provider is not configured (GROQ_API_KEY or OPENAI_API_KEY missing)", 503, {
-      decision: "ANALYSIS_UNAVAILABLE",
-      reason: "No AI provider credential (Groq or OpenAI) is configured, so AcadIQ Copilot could not respond.",
-      confidence: 0,
-    });
-  }
-
-  const totalChars = messages.reduce((sum, m) => sum + m.content.length, 0);
-  if (totalChars > env.maxAiInputChars) {
-    throw new AppError("Conversation context is too large for the AI provider", 413, {
-      maxCharacters: env.maxAiInputChars,
-      actualCharacters: totalChars,
-    });
-  }
-
-  let lastFailure = "AI copilot request failed";
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    let response: Response;
-    try {
-      response = await fetch(env.openAiBaseUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${env.openAiApiKey}`,
-        },
-        body: JSON.stringify({
-          model: env.openAiModel,
-          messages,
-          temperature: 0.2,
-          max_tokens: 8192,
-          response_format: { type: "json_object" },
-        }),
-        signal: AbortSignal.timeout(env.aiTimeoutMs),
-      });
-    } catch (error) {
-      lastFailure = "AI provider is unavailable";
-      if (attempt === 2) {
-        logger.error("llm_copilot_json_transport_failed", { error: error instanceof Error ? error.message : String(error) });
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt)));
-      continue;
-    }
-
-    if (!response.ok) {
-      const failure = await classifyFailure(response);
-      lastFailure = failure.message;
-      logger.warn("llm_copilot_json_attempt_failed", { attempt: attempt + 1, statusCode: response.status, retryable: failure.retryable });
-      if (!failure.retryable) break;
-      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, response, failure.retryAfterMs)));
-      continue;
-    } else {
-      try {
-        const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
-        const content = body?.choices?.[0]?.message?.content;
-        if (!content) {
-          lastFailure = "AI provider returned an empty response";
-        } else {
-          const normalized = content
-            .trim()
-            .replace(/^```(?:json)?\s*/i, "")
-            .replace(/\s*```$/, "");
-          try {
-            return JSON.parse(normalized) as T;
-          } catch {
-            const objectStart = normalized.indexOf("{");
-            const objectEnd = normalized.lastIndexOf("}");
-            if (objectStart >= 0 && objectEnd > objectStart) {
-              try {
-                return JSON.parse(normalized.slice(objectStart, objectEnd + 1)) as T;
-              } catch {
-                // fall through to retry
-              }
-            }
-            lastFailure = "AI provider returned malformed JSON";
-          }
-        }
-      } catch {
-        lastFailure = "AI provider returned an unreadable response";
-      }
-    }
-
-    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, response)));
-  }
-
-  logger.error("llm_copilot_json_failed", { reason: lastFailure });
-  throw new AppError(lastFailure, 502, {
-    decision: "ANALYSIS_UNAVAILABLE",
-    reason: `${lastFailure} after 3 recovery attempts; AcadIQ Copilot did not respond.`,
-    confidence: 0,
-  });
+export async function callLlmChatJson<T>(messages: ChatMessage[], options: LlmCallOptions = {}): Promise<T> {
+  return (await routedCompletion<T>(messages, { ...options, json: true })).data!;
 }
 
 export interface LlmCallOptions {
   model?: string;
+  /** Explicit model calls are strict unless fallback is enabled. */
+  allowFallback?: boolean;
   /** Defaults to 0.2 (near-deterministic). Self-consistency sampling raises it. */
   temperature?: number;
 }
 
 export interface LlmCallMeta {
   model: string;
+  modelId: string;
+  provider: string;
+  fallbackUsed: boolean;
   temperature: number;
   promptTokens: number | null;
   completionTokens: number | null;
@@ -275,6 +291,7 @@ export interface LlmJsonResult<T> {
 }
 
 interface ChatCompletionBody {
+  model?: string;
   choices?: { message?: { content?: string } }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
 }
@@ -304,116 +321,114 @@ function parseJsonObject<T>(content: string): T | undefined {
   }
 }
 
+// Cooldowns are local to this server process. They reduce repeated calls to an
+// exhausted account; they are not a balance estimate or a permanent disable.
+const providerCooldowns = new Map<string, number>();
+export function resetAiProviderCooldowns() { providerCooldowns.clear(); }
+
+async function routedCompletion<T = unknown>(
+  messages: ChatMessage[],
+  options: LlmCallOptions & { json?: boolean; maxTokens?: number }
+): Promise<{ raw: string; data?: T; meta: LlmCallMeta }> {
+  if (messages.reduce((sum, message) => sum + message.content.length, 0) > env.maxAiInputChars) {
+    throw new AppError("Conversation context is too large for the AI provider", 413, { maxCharacters: env.maxAiInputChars });
+  }
+  const { target, allowFallback } = resolveChatSelection(options);
+  const candidates = [target];
+  if (allowFallback) {
+    for (const provider of getAiProviders()) {
+      if (provider.id !== target.provider.id) candidates.push({ provider, model: provider.defaultModel, id: `${provider.id}:${provider.defaultModel}` });
+    }
+  }
+  const started = Date.now();
+  const deadline = started + env.aiTimeoutMs;
+  const temperature = options.temperature ?? 0.2;
+  let attempts = 0;
+  let lastFailure = "Configured AI providers are temporarily unavailable. Please retry shortly.";
+
+  for (const candidate of candidates) {
+    const { provider, model } = candidate;
+    const cooldownKey = `${provider.id}:${provider.baseUrl}`;
+    // Explicit, strict choices still get a fresh attempt if the user retries.
+    if (allowFallback && (providerCooldowns.get(cooldownKey) ?? 0) > Date.now()) continue;
+    for (let attempt = 0; attempt < 3 && Date.now() < deadline; attempt += 1) {
+      attempts += 1;
+      let response: Response;
+      let body: ChatCompletionBody;
+      try {
+        response = await fetch(provider.baseUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${provider.apiKey}` },
+          body: JSON.stringify({ model, messages, temperature, max_tokens: options.maxTokens ?? 8192,
+            ...(options.json ? { response_format: { type: "json_object" } } : {}) }),
+          signal: AbortSignal.timeout(Math.max(1, Math.min(deadline - Date.now(), Math.max(1000, Math.floor(env.aiTimeoutMs / candidates.length))))),
+        });
+        if (!response.ok) {
+          const failure = await classifyFailure(response);
+          lastFailure = failure.message;
+          const quota = response.status === 402 || /insufficient_quota|insufficient (?:credits|balance)|quota.*exhausted|credit.*(?:exhausted|insufficient)/i.test(failure.detail ?? "");
+          const canSwitch = failure.retryable || quota || response.status === 401 || response.status === 403 || response.status === 408;
+          logger.warn("llm_provider_attempt_failed", { provider: provider.id, model, statusCode: response.status, attempt: attempts });
+          if (!canSwitch) throw new AppError(lastFailure, response.status === 413 ? 413 : 502);
+          if (allowFallback) {
+            const headerSeconds = Number(response.headers.get("retry-after"));
+            const headerDate = Date.parse(response.headers.get("retry-after") ?? "");
+            const wait = failure.retryAfterMs ?? (headerSeconds > 0 ? headerSeconds * 1000 : Number.isFinite(headerDate) ? headerDate - Date.now() : 0);
+            providerCooldowns.set(cooldownKey, Date.now() + Math.min(300_000, Math.max(wait, quota ? 60_000 : response.status === 429 ? 30_000 : 5_000)));
+            break;
+          }
+          if (quota || !failure.retryable) break;
+          const delay = backoffDelayMs(attempt, response, failure.retryAfterMs);
+          if (attempt < 2 && Date.now() + delay < deadline) await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+        body = await response.json() as ChatCompletionBody;
+      } catch (error) {
+        if (error instanceof AppError) throw error;
+        lastFailure = "AI provider is unavailable or returned an unreadable response";
+        // A failed transport can be served by another configured account.
+        if (allowFallback) {
+          providerCooldowns.set(cooldownKey, Date.now() + 5_000);
+          break;
+        }
+        if (attempt < 2 && Date.now() + 250 < deadline) await new Promise((resolve) => setTimeout(resolve, 250));
+        continue;
+      }
+      const content = body?.choices?.[0]?.message?.content;
+      const data = typeof content === "string" && options.json ? parseJsonObject<T>(content) : undefined;
+      if (typeof content === "string" && content.trim() && (!options.json || data !== undefined)) {
+        // Routers can resolve an alias to a concrete model; use their returned ID
+        // when available so attribution never labels a fallback as the request.
+        const actualModel = typeof body.model === "string" && body.model.trim() ? body.model.trim() : model;
+        const actual = { ...candidate, model: actualModel, id: `${provider.id}:${actualModel}` };
+        const fallbackUsed = candidate.id !== target.id;
+        providerCooldowns.delete(cooldownKey);
+        recordAiModel(publicAiModel(actual), fallbackUsed);
+        return { raw: content, data, meta: {
+          model: actualModel, modelId: actual.id, provider: provider.id, fallbackUsed, temperature,
+          promptTokens: body.usage?.prompt_tokens ?? null, completionTokens: body.usage?.completion_tokens ?? null,
+          totalTokens: body.usage?.total_tokens ?? null, latencyMs: Date.now() - started, attempts,
+          rateLimitRemainingTokens: headerNumber(response, "x-ratelimit-remaining-tokens"),
+          rateLimitRemainingRequests: headerNumber(response, "x-ratelimit-remaining-requests"),
+        } };
+      }
+      lastFailure = options.json ? "AI provider returned malformed JSON" : "AI provider returned an empty response";
+      if (attempt < 2 && Date.now() + 250 < deadline) await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+  throw new AppError(lastFailure, 502, { decision: "ANALYSIS_UNAVAILABLE", reason: "No configured AI model completed this request.", confidence: 0 });
+}
+
 export async function callLlmJsonWithMeta<T>(
   systemPrompt: string,
   userPrompt: string,
   options: LlmCallOptions = {}
 ): Promise<LlmJsonResult<T>> {
-  if (!env.openAiApiKey) {
-    throw new AppError("AI provider is not configured (GROQ_API_KEY or OPENAI_API_KEY missing)", 503, {
-      decision: "ANALYSIS_UNAVAILABLE",
-      reason: "No AI provider credential (Groq or OpenAI) is configured, so AcadIQ did not generate or store a decision.",
-      confidence: 0,
-    });
-  }
-
-  if (userPrompt.length > env.maxAiInputChars) {
-    throw new AppError("Document content is too large for analysis", 413, { maxCharacters: env.maxAiInputChars });
-  }
-
-  const messages: ChatMessage[] = [
+  const result = await routedCompletion<T>([
     { role: "system", content: systemPrompt },
     { role: "user", content: userPrompt },
-  ];
-  const model = options.model ?? env.openAiModel;
-  const temperature = options.temperature ?? 0.2;
-  const started = Date.now();
-
-  let lastFailure = "AI analysis request failed";
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    let response: Response;
-    try {
-      response = await fetch(env.openAiBaseUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${env.openAiApiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature,
-          max_tokens: 8192,
-          response_format: { type: "json_object" },
-        }),
-        signal: AbortSignal.timeout(env.aiTimeoutMs),
-      });
-    } catch (error) {
-      lastFailure = "AI provider is unavailable";
-      if (attempt === 2) {
-        logger.error("llm_transport_failed", { error: error instanceof Error ? error.message : String(error) });
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt)));
-      continue;
-    }
-    if (!response.ok) {
-      const remaining = headerNumber(response, "x-ratelimit-remaining-tokens");
-      const failure = await classifyFailure(response);
-      lastFailure = failure.message;
-      logger.warn("llm_request_attempt_failed", {
-        attempt: attempt + 1,
-        statusCode: response.status,
-        model,
-        remainingTokens: remaining,
-        promptChars: systemPrompt.length + userPrompt.length,
-        retryable: failure.retryable,
-        detail: failure.detail?.slice(0, 200),
-      });
-      if (!failure.retryable) break;
-      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, response, failure.retryAfterMs)));
-      continue;
-    } else {
-      try {
-        const body = (await response.json()) as ChatCompletionBody;
-        const content = body?.choices?.[0]?.message?.content;
-        if (!content) {
-          lastFailure = "AI provider returned an empty response";
-        } else {
-          const data = parseJsonObject<T>(content);
-          if (data !== undefined) {
-            return {
-              data,
-              raw: content,
-              meta: {
-                model,
-                temperature,
-                promptTokens: body.usage?.prompt_tokens ?? null,
-                completionTokens: body.usage?.completion_tokens ?? null,
-                totalTokens: body.usage?.total_tokens ?? null,
-                latencyMs: Date.now() - started,
-                attempts: attempt + 1,
-                rateLimitRemainingTokens: headerNumber(response, "x-ratelimit-remaining-tokens"),
-                rateLimitRemainingRequests: headerNumber(response, "x-ratelimit-remaining-requests"),
-              },
-            };
-          }
-          lastFailure = "AI provider returned malformed JSON";
-        }
-      } catch {
-        lastFailure = "AI provider returned an unreadable response";
-      }
-    }
-
-    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, response)));
-  }
-
-  logger.error("llm_request_failed", { reason: lastFailure });
-  throw new AppError(lastFailure, 502, {
-    decision: "ANALYSIS_UNAVAILABLE",
-    reason: `${lastFailure} after 3 recovery attempts; no AI decision was stored.`,
-    confidence: 0,
-  });
+  ], { ...options, json: true });
+  return { data: result.data!, raw: result.raw, meta: result.meta };
 }
 
 export async function callLlmJson<T>(systemPrompt: string, userPrompt: string, options: LlmCallOptions = {}): Promise<T> {

@@ -8,9 +8,14 @@ All responses use a consistent envelope:
 // success
 { "success": true, "data": { ... } }
 
+// success, when the request used AI
+{ "success": true, "data": { ... }, "ai": { "requestedModel": "auto", "fallbackUsed": true, "usedModels": [ ... ] } }
+
 // error
 { "success": false, "error": { "message": "string", "details": {} } }
 ```
+
+The `ai` block is present only on responses that actually called a model, and reports which provider answered. See [AI model selection](#ai-model-selection).
 
 Authenticated routes require `Authorization: Bearer <JWT>`.
 
@@ -83,6 +88,44 @@ Fields: `courseId`, `file` (PDF, ≤10MB). Response `201`: the stored `SyllabusD
 
 ### `POST /upload/question-paper` (multipart/form-data)
 Fields: `courseId`, `year`, `semester`, `file` (PDF). The backend extracts text and auto-segments questions. Response `201`: the stored `QuestionPaper`.
+
+---
+
+## AI model selection
+
+Several chat providers can be configured server-side, and the caller may pick one. Keys and endpoints never leave the backend. Full setup: [`ai-providers.md`](ai-providers.md).
+
+### `GET /ai/models`
+
+Returns the allowlisted model catalogue for the model picker. Requires authentication.
+
+```json
+{
+  "success": true,
+  "data": {
+    "defaultModelId": "default:openai/gpt-oss-120b",
+    "models": [
+      { "id": "default:openai/gpt-oss-120b", "provider": "default", "providerLabel": "Groq", "model": "openai/gpt-oss-120b", "label": "Groq / openai/gpt-oss-120b" }
+    ],
+    "visionModels": [
+      { "id": "openrouter:google/gemma-4-31b-it:free", "provider": "openrouter", "providerLabel": "OpenRouter", "model": "google/gemma-4-31b-it:free", "label": "OpenRouter / google/gemma-4-31b-it:free" }
+    ]
+  }
+}
+```
+
+`models` holds chat/JSON models and `visionModels` holds image-capable ones. They are deliberately separate lists rather than one flagged list, because a model in one is usually not usable in the other. The model picker should offer `models`; image features draw on `visionModels`. Both are empty and `defaultModelId` is `null` when no provider is configured.
+
+### Request headers
+
+Any endpoint that uses AI accepts two optional headers:
+
+| Header | Values | Effect |
+| --- | --- | --- |
+| `X-AI-Model` | `auto` (default) or `provider-id:model-id` | `auto` starts at the default model; an explicit ID pins that model |
+| `X-AI-Fallback` | `true` / `false` | Whether another provider may serve the request. `auto` enables it by default; an explicit model is strict unless this is `true` |
+
+When fallback is on and a provider is rate-limited, out of credit, or unreachable, the next configured provider is tried automatically and `ai.fallbackUsed` is `true`. An unknown model ID is rejected with `400` before any provider receives the prompt.
 
 ---
 
@@ -214,6 +257,6 @@ Fetch one complete report with its JSON snapshot, recommendations, AI explanatio
 | `404` | Resource not found, or not owned by the caller |
 | `409` | Conflict (duplicate email on register) |
 | `429` | Rate limit exceeded (`express-rate-limit`) |
-| `502` | AI provider returned an error or a response that failed schema validation |
+| `502` | AI provider returned an error or a response that failed schema validation, or every configured provider was exhausted |
 | `503` | AI provider not configured (missing API key) |
 | `500` | Unhandled server error (logged, generic message returned to client) |

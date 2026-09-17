@@ -18,6 +18,18 @@ export function useCourse(id: number | null) {
   });
 }
 
+export function useDeleteCourse() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => courseService.remove(id),
+    onSuccess: (_result, id) => {
+      queryClient.removeQueries({ queryKey: courseKeys.detail(id) });
+      // Reports, papers and schedule views all embed course data that just changed.
+      queryClient.invalidateQueries();
+    },
+  });
+}
+
 export function useCreateCourse() {
   const queryClient = useQueryClient();
   return useMutation({

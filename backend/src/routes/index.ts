@@ -10,6 +10,10 @@ import coRoutes from "./co.routes";
 import adminRoutes from "./admin.routes";
 import copilotRoutes from "./copilot.routes";
 import feedbackRoutes from "./feedback.routes";
+import paperRoutes from "./paper.routes";
+import rubricRoutes from "./rubric.routes";
+import scheduleRoutes, { scheduleFeedRouter } from "./schedule.routes";
+import assistantRoutes from "./assistant.routes";
 import aiRoutes from "./ai.routes";
 
 const router = Router();
@@ -26,6 +30,11 @@ router.use("/co", coRoutes);
 router.use("/admin", adminRoutes);
 router.use("/copilot", copilotRoutes);
 router.use("/feedback", feedbackRoutes);
+router.use("/papers", paperRoutes);
+router.use("/rubrics", rubricRoutes);
+router.use("/schedule", scheduleFeedRouter);
+router.use("/schedule", scheduleRoutes);
+router.use("/assistant", assistantRoutes);
 router.use("/ai", aiRoutes);
 
 export default router;

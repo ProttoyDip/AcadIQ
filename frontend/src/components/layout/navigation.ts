@@ -7,10 +7,14 @@ import {
   BrainCircuit,
   FileBarChart,
   Wand2,
+  Library,
+  CalendarDays,
   Cpu,
   FileText,
   Eye,
   ListOrdered,
+  Users,
+  Building2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -33,6 +37,7 @@ export const navGroups: NavGroup[] = [
     links: [
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { to: "/courses", label: "Courses", icon: GraduationCap },
+      { to: "/schedule", label: "Schedule", icon: CalendarDays },
       { to: "/upload", label: "Upload & Analyze", icon: UploadCloud },
       { to: "/reports", label: "Reports", icon: FileBarChart },
     ],
@@ -52,6 +57,7 @@ export const navGroups: NavGroup[] = [
       { to: "/dual-evaluate", label: "Dual LLM Evaluator", icon: BrainCircuit },
       { to: "/question-memory", label: "Academic Memory", icon: History },
       { to: "/paper-generator", label: "Paper Generator", icon: Wand2 },
+      { to: "/question-bank", label: "Question Bank", icon: Library },
     ],
   },
   {
@@ -59,3 +65,21 @@ export const navGroups: NavGroup[] = [
     links: [{ to: "/settings", label: "Settings", icon: SettingsIcon }],
   },
 ];
+
+export const adminNavGroups: NavGroup[] = [
+  {
+    label: "Administration",
+    links: [
+      { to: "/admin/users", label: "Users", icon: Users },
+      { to: "/admin/routine", label: "Department routine", icon: Building2 },
+    ],
+  },
+  {
+    label: "Account",
+    links: [{ to: "/settings", label: "Settings", icon: SettingsIcon }],
+  },
+];
+
+export function navGroupsFor(role: string | undefined): NavGroup[] {
+  return role === "ADMIN" ? adminNavGroups : navGroups;
+}

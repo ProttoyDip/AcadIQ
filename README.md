@@ -46,6 +46,7 @@ AcadIQ ingests a course's syllabus and question papers (PDF), and runs three foc
 - **AI Recommendation Engine** — plain-language, priority-ranked suggestions grounded in the same evidence as the scores (e.g., *"Too many recall-based questions — add more analytical items."*).
 - **Full audit in one click** — runs every analysis for a paper and reports per-step outcomes; **PDF export** for moderation paperwork.
 - **Dual-LLM Evaluator** — two models from different vendors score a student answer against your marking scheme; disagreement is flagged for faculty review.
+- **Multi-provider AI with automatic failover** — configure several providers; if one is rate-limited or out of credit, the next one answers. Faculty can pick a specific model or leave it on Auto, and every answer shows which model produced it.
 - **Faculty dashboard** — course pages with per-term quality trends, document upload, visual reports (Chart.js), JWT-secured multi-user access.
 
 ## System Architecture
@@ -84,7 +85,7 @@ Full architecture write-up: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · ER
 **Frontend:** React 18, Vite, TypeScript, Tailwind CSS, React Router, Zustand, Chart.js
 **Backend:** Node.js, Express, TypeScript, Clean Architecture (MVC + Service Layer), JWT, Zod
 **Database:** MySQL 8 (Docker), Prisma ORM, versioned migrations
-**AI:** OpenAI-compatible LLM API, structured-JSON prompting, Zod-validated response pipeline
+**AI:** OpenAI-compatible LLM APIs (multi-provider registry with ordered failover and user-selectable models), structured-JSON prompting, Zod-validated response pipeline
 **Infra:** Docker, Docker Compose
 
 ## Installation Guide
@@ -102,7 +103,8 @@ cd AcadIQ
 cp .env.example .env
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
-# then edit .env files: JWT_SECRET, OPENAI_API_KEY, DB credentials
+# then edit .env files: JWT_SECRET, OPENAI_API_KEY (or GROQ_API_KEY), DB credentials
+# optional: add more AI providers for failover via AI_PROVIDERS_JSON — see docs/ai-providers.md
 ```
 
 ### 3. Install dependencies (for local, non-Docker dev)
@@ -117,6 +119,23 @@ cd ../frontend && npm install
 ```bash
 docker compose up -d mysql
 ```
+
+### 5. (Optional) Local AI via Ollama
+
+Only needed for the **AI Hub** pages — PDF Assistant, Image Assistant and Question Generator — which run offline on your own machine instead of a cloud provider. Every other feature (analyses, Copilot, the assistant) uses the cloud providers and works without this.
+
+```bash
+winget install --id Ollama.Ollama -e     # macOS/Linux: see https://ollama.com/download
+ollama pull gemma3:4b                    # text + RAG   (~3 GB)
+ollama pull qwen2.5vl:3b                 # vision       (~3 GB)
+ollama pull nomic-embed-text             # embeddings   (~0.3 GB)
+```
+
+The installer starts a server on `http://localhost:11434` automatically; `ollama serve` fails with a port-in-use error if it is already running. `GET /api/ai/status` reports what the backend can see, and the AI Hub shows "Ollama Offline" plus a "Needs pull" badge per missing model. Expect slow responses on CPU-only machines.
+
+**If every model returns gibberish, force CPU.** On a machine whose GPU backend Ollama cannot drive correctly, models load onto the GPU and then emit corrupt output — random non-Latin glyphs followed by one unused token repeated until the runner aborts with `token repeat limit reached` or `Unexpected empty grammar stack`. It affects text and vision models alike, so it looks like a broken install rather than a driver problem. Check `ollama ps` (it will report `100% GPU`) and the server log for a line such as `AMD driver is too old`. Set `OLLAMA_NUM_GPU=0` in `backend/.env` to run on CPU instead: slower, but correct. Remove that line once the GPU driver is updated.
+
+These models are separate from the question-similarity embeddings, which run in-process via Transformers.js and need no Ollama.
 
 ## Running the project
 
@@ -173,6 +192,7 @@ Full request/response reference: [`docs/API.md`](docs/API.md).
 | `POST` | `/api/analysis/similarity` | Run the Question Similarity Detector |
 | `POST` | `/api/analysis/full` | Run every analysis for a paper in one call (per-step outcomes) |
 | `POST` | `/api/analysis/dual-evaluate` | Two-model consensus grading of a student answer |
+| `GET` | `/api/ai/models` | List the configured AI models a user can choose from |
 | `GET` | `/api/reports/:id` | Fetch a stored analysis report |
 | `GET` | `/api/reports/:id/pdf` | Download a report as PDF |
 

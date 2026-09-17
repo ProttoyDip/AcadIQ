@@ -5,6 +5,33 @@ export const courseRepository = {
     return prisma.course.findMany({ where: { facultyId }, orderBy: { createdAt: "desc" } });
   },
 
+  /**
+   * Deletes a course and reports what went with it. The counts are taken inside the
+   * transaction because the FK cascade removes those rows before we could read them
+   * afterwards. Timetable rows (slots, sessions, calendar events) are SET NULL in the
+   * schema, so they survive detached from the course rather than being destroyed —
+   * reported separately so the caller can say so instead of implying they were kept intact.
+   */
+  remove(id: number) {
+    return prisma.$transaction(async (tx) => {
+      const [syllabusDocuments, questionPapers, reports, teachingMaterials, lecturePlans, detachedSessions] = await Promise.all([
+        tx.syllabusDocument.count({ where: { courseId: id } }),
+        tx.questionPaper.count({ where: { courseId: id } }),
+        tx.analysisReport.count({ where: { courseId: id } }),
+        tx.teachingMaterial.count({ where: { courseId: id } }),
+        tx.lecturePlan.count({ where: { courseId: id } }),
+        tx.classSession.count({ where: { courseId: id } }),
+      ]);
+      const course = await tx.course.delete({ where: { id } });
+      return {
+        id: course.id,
+        courseCode: course.courseCode,
+        deleted: { syllabusDocuments, questionPapers, reports, teachingMaterials, lecturePlans },
+        detachedSessions,
+      };
+    });
+  },
+
   findById(id: number) {
     return prisma.course.findUnique({
       where: { id },
