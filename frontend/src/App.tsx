@@ -20,6 +20,10 @@ import Schedule from "./pages/Schedule";
 import Settings from "./pages/Settings";
 import DualEvaluatorPage from "./pages/DualEvaluatorPage";
 import AdminUsers from "./pages/AdminUsers";
+import AiHub from "./pages/ai/AiHub";
+import PdfAssistant from "./pages/ai/PdfAssistant";
+import ImageAssistant from "./pages/ai/ImageAssistant";
+import QuestionGenerator from "./pages/ai/QuestionGenerator";
 
 export default function App() {
   return (
@@ -55,6 +59,10 @@ export default function App() {
             <Route path="/question-bank" element={<QuestionBank />} />
             <Route path="/schedule" element={<Schedule />} />
             <Route path="/dual-evaluate" element={<DualEvaluatorPage />} />
+            <Route path="/ai" element={<AiHub />} />
+            <Route path="/ai/pdf" element={<PdfAssistant />} />
+            <Route path="/ai/image" element={<ImageAssistant />} />
+            <Route path="/ai/questions" element={<QuestionGenerator />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
         </Route>

@@ -52,6 +52,8 @@ model User {
   chatSessions        ChatSession[]
   questionFeedback    QuestionFeedback[]
   terms               Term[]
+  aiDocuments         Document[]
+  generatedQuestions  GeneratedQuestion[]
 
   @@map("users")
 }
@@ -701,5 +703,68 @@ model CopilotContext {
 
   @@index([sessionId, sourceType])
   @@map("copilot_contexts")
+}
+
+model Document {
+  id            Int                 @id @default(autoincrement())
+  userId        Int?                @map("user_id")
+  title         String              @db.VarChar(255)
+  originalName  String              @map("original_name") @db.VarChar(255)
+  filePath      String              @map("file_path") @db.VarChar(500)
+  mimeType      String              @map("mime_type") @db.VarChar(100)
+  fileSize      Int                 @map("file_size")
+  fileType      String              @default("PDF") @map("file_type") @db.VarChar(50) // PDF | COURSE_OUTLINE | IMAGE
+  extractedText String?             @map("extracted_text") @db.LongText
+  summary       String?             @db.LongText
+  keyPoints     Json?               @map("key_points")
+  status        String              @default("PROCESSED") @db.VarChar(50) // UPLOADED | PROCESSING | PROCESSED | ERROR
+  metadata      Json?
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+  user          User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  chunks        DocumentChunk[]
+  questions     GeneratedQuestion[]
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("documents")
+}
+
+model DocumentChunk {
+  id          Int      @id @default(autoincrement())
+  documentId  Int      @map("document_id")
+  chunkIndex  Int      @map("chunk_index")
+  content     String   @db.LongText
+  pageNumber  Int?     @map("page_number")
+  section     String?  @db.VarChar(255)
+  tokenCount  Int?     @map("token_count")
+  embedding   Bytes?   @db.Blob
+  createdAt   DateTime @default(now()) @map("created_at")
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+  @@index([documentId])
+  @@map("document_chunks")
+}
+
+model GeneratedQuestion {
+  id            Int       @id @default(autoincrement())
+  documentId    Int?      @map("document_id")
+  userId        Int?      @map("user_id")
+  topic         String?   @db.VarChar(255)
+  difficulty    String    @db.VarChar(50)
+  type          String    @db.VarChar(50) // MCQ | Short Answer | Descriptive | True/False | Viva | Conceptual | Application-based
+  question      String    @db.Text
+  options       Json?
+  correctAnswer String?   @map("correct_answer") @db.Text
+  explanation   String?   @db.Text
+  metadata      Json?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  document      Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([documentId])
+  @@index([userId])
+  @@map("generated_questions")
 }
 

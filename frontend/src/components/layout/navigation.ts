@@ -9,6 +9,10 @@ import {
   Wand2,
   Library,
   CalendarDays,
+  Cpu,
+  FileText,
+  Eye,
+  ListOrdered,
   type LucideIcon,
 } from "lucide-react";
 
@@ -34,6 +38,15 @@ export const navGroups: NavGroup[] = [
       { to: "/schedule", label: "Schedule", icon: CalendarDays },
       { to: "/upload", label: "Upload & Analyze", icon: UploadCloud },
       { to: "/reports", label: "Reports", icon: FileBarChart },
+    ],
+  },
+  {
+    label: "Local AI",
+    links: [
+      { to: "/ai", label: "AI Hub", icon: Cpu },
+      { to: "/ai/pdf", label: "PDF Assistant", icon: FileText },
+      { to: "/ai/image", label: "Image Assistant", icon: Eye },
+      { to: "/ai/questions", label: "Question Generator", icon: ListOrdered },
     ],
   },
   {

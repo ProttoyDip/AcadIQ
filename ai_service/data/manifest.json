@@ -1,0 +1,31 @@
+{
+  "dataset_name": "AcadIQ_BeSTRaP_and_OS_Instruction_Dataset",
+  "description": "Strict 70% Training / 30% Validation split for BeSTRaP Database Systems and CityU HK Operating Systems",
+  "total_samples": 82,
+  "train_samples": 57,
+  "val_samples": 25,
+  "train_percentage": 69.5,
+  "val_percentage": 30.5,
+  "split_ratio": "70/30",
+  "sources": [
+    {
+      "name": "BeSTRaP DBMS Dataset",
+      "doi": "10.3390/data11030057",
+      "course": "CSE301"
+    },
+    {
+      "name": "CityU HK OS Dataset",
+      "arxiv": "2405.19694",
+      "course": "CSE302"
+    }
+  ],
+  "task_breakdown": {
+    "RUBRIC_EVALUATION": 37,
+    "CO_MAPPING": 30,
+    "BLOOM_ANALYSIS": 15
+  },
+  "domain_breakdown": {
+    "Database Systems & Transactions": 45,
+    "Operating Systems": 37
+  }
+}

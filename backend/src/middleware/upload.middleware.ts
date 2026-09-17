@@ -61,6 +61,8 @@ export const uploadTeachingMaterial = multer({
 
 const ALLOWED_SCHEME_MIMES = new Set([
   "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/msword",
   "text/plain",
   "text/markdown",
   "application/octet-stream",
@@ -81,11 +83,11 @@ export const uploadReferenceScheme = multer({
     const ext = path.extname(file.originalname).toLowerCase();
     if (
       ALLOWED_SCHEME_MIMES.has(file.mimetype) ||
-      [".pdf", ".txt", ".md"].includes(ext)
+      [".pdf", ".docx", ".txt", ".md"].includes(ext)
     ) {
       cb(null, true);
     } else {
-      cb(new AppError("Only PDF or text files (.pdf, .txt, .md) are allowed as marking schemes", 400));
+      cb(new Error("Only PDF, Word, or text files (.pdf, .docx, .txt, .md) are allowed"));
     }
   },
 });

@@ -39,13 +39,13 @@ export const env = {
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
+  groqApiKey: groqApiKey ?? "",
   openAiApiKey,
   openAiBaseUrl:
     process.env.OPENAI_BASE_URL ??
     (isGroq ? "https://api.groq.com/openai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions"),
-  openAiModel: process.env.OPENAI_MODEL ?? (isGroq ? "openai/gpt-oss-120b" : "gpt-4o-mini"),
-  // Second, different-vendor model for the Dual Evaluator so its consensus is a real cross-check.
-  dualEvalSecondaryModel: process.env.DUAL_EVAL_SECONDARY_MODEL ?? (isGroq ? "qwen/qwen3.8-27b" : "gpt-4o"),
+  openAiModel: process.env.OPENAI_MODEL ?? (isGroq ? "llama-3.3-70b-versatile" : "gpt-4o-mini"),
+  dualEvalSecondaryModel: process.env.DUAL_EVAL_SECONDARY_MODEL ?? (isGroq ? "llama-3.1-8b-instant" : "gpt-4o"),
   aiTimeoutMs: positiveInteger("AI_TIMEOUT_MS", 45_000),
   maxAiInputChars: positiveInteger("MAX_AI_INPUT_CHARS", 80_000),
   /** Syllabus text is truncated to this many characters before entering any prompt (Groq free tier: ~8k tokens/request). */
@@ -75,5 +75,12 @@ export const env = {
     cacheEnabled: process.env.LLM_CACHE_ENABLED !== "false",
     cacheTtlDays: positiveInteger("LLM_CACHE_TTL_DAYS", 30),
     traceRetentionDays: positiveInteger("TRACE_RETENTION_DAYS", 90),
+  },
+  ollama: {
+    baseUrl: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434",
+    textModel: process.env.OLLAMA_TEXT_MODEL ?? "gemma3:4b",
+    visionModel: process.env.OLLAMA_VISION_MODEL ?? "qwen2.5vl:3b",
+    embeddingModel: process.env.OLLAMA_EMBEDDING_MODEL ?? "nomic-embed-text",
+    timeoutMs: positiveInteger("OLLAMA_TIMEOUT_MS", 120_000),
   },
 };

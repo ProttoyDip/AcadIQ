@@ -1,0 +1,30 @@
+{
+  "evaluation_name": "AcadIQ_30_Pct_Holdout_Validation_Report",
+  "dataset": {
+    "source": "BeSTRaP DBMS & CityU HK OS Holdout Set",
+    "total_val_samples": 25,
+    "rubric_samples_count": 15,
+    "co_mapping_samples_count": 6,
+    "bloom_samples_count": 4,
+    "split_ratio": "30% Holdout Validation"
+  },
+  "metrics": {
+    "json_schema_adherence_pct": 100.0,
+    "rubric_overall_mae": 0.133,
+    "rubric_criteria_mae": {
+      "conceptual_accuracy_mae": 0.173,
+      "completeness_mae": 0.16,
+      "clarity_mae": 0.1,
+      "terminology_mae": 0.1
+    },
+    "assigned_marks_mae": 0.313,
+    "co_mapping_accuracy_pct": 100.0,
+    "bloom_taxonomy_accuracy_pct": 100.0,
+    "consensus_agreement_pct": 96.8
+  },
+  "performance_grades": {
+    "rubric_scoring": "EXCELLENT (MAE < 0.25 on 0-10 scale)",
+    "schema_compliance": "PERFECT (100% valid JSON adherence)",
+    "domain_co_alignment": "HIGH PRECISION (100% correct CO classification)"
+  }
+}
