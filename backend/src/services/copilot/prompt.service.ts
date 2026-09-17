@@ -37,7 +37,7 @@ function renderCourseSection(context: CopilotContext, syllabusLimit: number): st
   if (context.questions && context.questions.length > 0) {
     // Relevant questions (by embedding cosine to the message) lead; the rest follow so Q-number references still resolve.
     const ordered = [...context.questions].sort((a, b) => (b.relevance ?? -1) - (a.relevance ?? -1) || a.sequenceNumber - b.sequenceNumber);
-    if (context.retrieval.relevantQuestions.length) {
+    if (context.retrieval?.relevantQuestions?.length) {
       section += `\n\nMost relevant to this message: ${context.retrieval.relevantQuestions.map((n) => `Q${n}`).join(", ")}`;
     }
     section += `\n\nExam Questions (${context.questions.length} total):`;
@@ -49,7 +49,7 @@ function renderCourseSection(context: CopilotContext, syllabusLimit: number): st
     }
   }
   if (context.syllabusExcerpt && syllabusLimit > 0) {
-    const label = context.retrieval.method === "EMBEDDING" && context.retrieval.syllabusChunks > 0
+    const label = context.retrieval?.method === "EMBEDDING" && (context.retrieval?.syllabusChunks ?? 0) > 0
       ? `Syllabus Passages Retrieved For This Message (${context.retrieval.syllabusChunks}, ranked by semantic similarity):`
       : "Syllabus Content Excerpt:";
     section += `\n\n${label}\n${context.syllabusExcerpt.slice(0, syllabusLimit)}`;

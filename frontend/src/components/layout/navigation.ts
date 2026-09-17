@@ -13,6 +13,8 @@ import {
   FileText,
   Eye,
   ListOrdered,
+  Users,
+  Building2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -63,3 +65,21 @@ export const navGroups: NavGroup[] = [
     links: [{ to: "/settings", label: "Settings", icon: SettingsIcon }],
   },
 ];
+
+export const adminNavGroups: NavGroup[] = [
+  {
+    label: "Administration",
+    links: [
+      { to: "/admin/users", label: "Users", icon: Users },
+      { to: "/admin/routine", label: "Department routine", icon: Building2 },
+    ],
+  },
+  {
+    label: "Account",
+    links: [{ to: "/settings", label: "Settings", icon: SettingsIcon }],
+  },
+];
+
+export function navGroupsFor(role: string | undefined): NavGroup[] {
+  return role === "ADMIN" ? adminNavGroups : navGroups;
+}

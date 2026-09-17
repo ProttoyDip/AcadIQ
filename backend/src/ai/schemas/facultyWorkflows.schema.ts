@@ -65,6 +65,7 @@ export const routineExtractResponseSchema = z.object({
       z.object({
         courseLabel: nonEmpty.max(120),
         section: z.string().trim().max(40).nullable(),
+        teacher: z.string().trim().max(80).nullable().optional(),
         dayOfWeek: z.number().int().min(0).max(6),
         startTime: hhmm,
         endTime: hhmm,
@@ -73,7 +74,7 @@ export const routineExtractResponseSchema = z.object({
         confidence: z.number().min(0).max(100),
       })
     )
-    .max(80),
+    .max(400),
   termHint: z.object({ name: z.string().nullable(), startDate: isoDate.nullable(), endDate: isoDate.nullable() }).optional(),
   warnings: z.array(z.string()).max(20).optional(),
 });
@@ -92,3 +93,12 @@ export const paceReplanResponseSchema = z.object({
   summary: nonEmpty.max(1000),
 });
 export type PaceReplanResponse = z.infer<typeof paceReplanResponseSchema>;
+
+export const assistantPlannerResponseSchema = z.object({
+  reply: nonEmpty.max(1500),
+  actions: z.array(z.object({ tool: nonEmpty.max(60), args: z.record(z.unknown()).default({}), why: z.string().max(300).default("") })).max(8).default([]),
+  needsConfirmation: z.boolean().default(false),
+  followUpQuestion: z.string().max(300).nullable().default(null),
+  navigate: z.string().max(120).nullable().default(null),
+});
+export type AssistantPlannerResponse = z.infer<typeof assistantPlannerResponseSchema>;

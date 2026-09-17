@@ -620,6 +620,7 @@ export interface Term {
   startDate: string;
   endDate: string;
   isActive: boolean;
+  feedToken?: string | null;
   createdAt: string;
   _count?: { slots: number; sessions: number; events: number };
 }
@@ -660,6 +661,8 @@ export interface RoutineExtractResult {
   file: string;
   facultyName: string;
   initials: string;
+  scope?: "PERSONAL" | "FACULTY";
+  method?: "DOCUMENT" | "VISION";
   slots: ExtractedSlot[];
   termHint: { name: string | null; startDate: string | null; endDate: string | null } | null;
   warnings: string[];
@@ -672,9 +675,113 @@ export interface CalendarEvent {
   termId: number;
   date: string;
   endDate: string | null;
-  kind: "HOLIDAY" | "EXAM_WEEK" | "DEADLINE" | "OTHER";
+  kind: "HOLIDAY" | "EXAM_WEEK" | "DEADLINE" | "ASSESSMENT" | "OTHER";
   title: string;
   source: string;
+  courseId?: number | null;
+  section?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  course?: { id: number; courseCode: string } | null;
+}
+
+export interface Clash {
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  rule: "SAME_DAY" | "OVERLOADED_WEEK" | "OVERLAPS_CLASS" | "ON_BLOCKED_DAY" | "UNTAUGHT_TOPICS";
+  message: string;
+  hint: string;
+  eventIds: number[];
+  sessionId?: number;
+}
+
+export interface WorkloadReport {
+  termId: number;
+  termName: string;
+  contactHoursPerWeek: number;
+  perCourse: Array<{ courseLabel: string; hoursPerWeek: number; sessions: number; held: number; cancelled: number; makeups: number }>;
+  perWeekday: Array<{ day: string; dayOfWeek: number; hours: number; classes: number }>;
+  heatmap: { hours: number[]; rows: Array<{ dayOfWeek: number; day: string; cells: number[] }> };
+  statusCounts: Record<string, number>;
+  cancellationRate: number;
+  makeupCoverage: number;
+  busiestDay: string | null;
+  peakWeeks: Array<{ week: number; hours: number }>;
+  totalWeeks: number;
+}
+
+export interface DigestPrefs {
+  digestEnabled: boolean;
+  digestHour: number;
+  digestLastSent: string | null;
+  timezone: string | null;
+  serverTimezone?: string;
+  email: string;
+  mailerConfigured: boolean;
+}
+
+export interface DigestPreview {
+  subject: string;
+  html: string;
+  text: string;
+  prefs: DigestPrefs;
+  mailerConfigured: boolean;
+}
+
+export interface FreeRoomsResult {
+  date: string;
+  startTime: string;
+  endTime: string;
+  free: string[];
+  busy: Array<{ room: string; occupiedBy: string }>;
+  source: "DEPARTMENT_ROUTINE" | "NONE";
+}
+
+export interface DepartmentRoutine {
+  id: number;
+  termLabel: string;
+  originalName: string;
+  slotCount: number;
+  createdAt: string;
+  uploadedBy?: { name: string };
+}
+
+export interface DepartmentSlot {
+  id: number;
+  courseLabel: string;
+  section: string | null;
+  teacher: string | null;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  room: string | null;
+  kind: string;
+}
+
+/* ---------- Assistant ---------- */
+
+export interface AssistantPendingAction {
+  index: number;
+  tool: string;
+  args: Record<string, unknown>;
+  label: string;
+  why: string;
+  mutating: boolean;
+}
+
+export interface AssistantChatReply {
+  reply: string;
+  followUpQuestion: string | null;
+  navigate: string | null;
+  pendingActions: AssistantPendingAction[];
+  actionToken: string | null;
+  results: Array<{ tool: string; label: string; ok: boolean; result?: unknown; error?: string }>;
+  rejected: Array<{ tool: string; reason: string }>;
+  context: { today: string; term: string | null; makeupDebt: number };
+}
+
+export interface AssistantExecuteResult {
+  results: Array<{ index: number; tool: string; ok: boolean; skipped?: boolean; result?: unknown; error?: string }>;
+  summary: string;
 }
 
 export interface ClassSession {

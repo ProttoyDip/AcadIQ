@@ -1,7 +1,8 @@
 import { Response } from "express";
+import { aiResponseMetadata } from "../ai/modelContext";
 
 export function success(res: Response, data: unknown, status = 200) {
-  return res.status(status).json({ success: true, data });
+  return res.status(status).json({ success: true, data, ai: aiResponseMetadata() });
 }
 
 export function failure(res: Response, message: string, status = 400, details?: unknown) {

@@ -11,6 +11,9 @@ router.get("/status", aiController.getStatus);
 // Authenticated AI routes
 router.use(authenticate);
 
+// Configured chat providers/models the user may pick from (no keys or endpoints).
+router.get("/models", aiController.listModels);
+
 // Documents collection
 router.get("/documents", aiController.listDocuments);
 router.get("/document/:id", aiController.getDocument);

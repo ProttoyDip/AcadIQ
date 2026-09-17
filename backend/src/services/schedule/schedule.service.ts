@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../database/prismaClient";
 import { AppError } from "../../middleware/error.middleware";
+import { env } from "../../config/env";
 import { runLlmAnalysis } from "../../ai/runner";
 import { CLASS_NOTICE_PROMPT, PACE_REPLAN_PROMPT } from "../../ai/prompts/timetable.prompt";
 import { classNoticeResponseSchema, paceReplanResponseSchema } from "../../ai/schemas/facultyWorkflows.schema";
@@ -10,9 +12,12 @@ import { auditService } from "../audit.service";
 import { addDays, DAY_NAMES, isValidIsoDate, MAX_EVENT_DAYS, MAX_TERM_DAYS, spanDays, todayIso, toMinutes } from "./dates";
 import { findFreeSlots, generateSessions } from "./sessionGenerator";
 import { buildIcs } from "./ics";
+import { detectClashes } from "./clashes";
+import { computeWorkload } from "./workload";
+import { departmentRoutineService } from "./departmentRoutine.service";
 
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "HH:MM expected");
-const isoDate = z.string().refine(isValidIsoDate, "YYYY-MM-DD expected");
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD expected").refine(isValidIsoDate, "YYYY-MM-DD expected");
 const timeRange = <T extends { startTime: string; endTime: string }>(v: T) => toMinutes(v.endTime) > toMinutes(v.startTime);
 
 const termBase = z.object({
@@ -58,33 +63,37 @@ export type SlotInput = z.infer<typeof slotSchema>;
 
 export const slotsBulkSchema = z.object({ slots: z.array(slotSchema).min(1).max(80), replace: z.boolean().default(false) });
 
-export const eventSchema = z
-  .object({
-    date: isoDate,
-    endDate: isoDate.nullable().optional(),
-    kind: z.enum(["HOLIDAY", "EXAM_WEEK", "DEADLINE", "OTHER"]),
-    title: z.string().trim().min(1).max(160),
-  })
+export const eventBaseSchema = z.object({
+  date: isoDate,
+  endDate: isoDate.nullable().optional(),
+  kind: z.enum(["HOLIDAY", "EXAM_WEEK", "DEADLINE", "ASSESSMENT", "OTHER"]),
+  title: z.string().trim().min(1).max(160),
+  courseId: z.coerce.number().int().positive().nullable().optional(),
+  section: z.string().trim().max(40).nullable().optional(),
+  startTime: hhmm.nullable().optional(),
+  endTime: hhmm.nullable().optional(),
+});
+export const eventSchema = eventBaseSchema
   .refine((v) => !v.endDate || v.endDate >= v.date, { message: "endDate must be on or after date", path: ["endDate"] })
   .refine((v) => !v.endDate || spanDays(v.date, v.endDate) <= MAX_EVENT_DAYS, {
     message: `An event cannot exceed ${MAX_EVENT_DAYS} days`,
     path: ["endDate"],
-  });
+  })
+  .refine((v) => !(v.startTime && v.endTime) || toMinutes(v.endTime) > toMinutes(v.startTime), { message: "endTime must be after startTime", path: ["endTime"] });
 export const eventsBulkSchema = z.object({ events: z.array(eventSchema).min(1).max(100) });
 
-export const sessionCreateSchema = z
-  .object({
-    courseId: z.coerce.number().int().positive().nullable().optional(),
-    courseLabel: z.string().trim().min(1).max(120),
-    section: z.string().trim().max(40).nullable().optional(),
-    date: isoDate,
-    startTime: hhmm,
-    endTime: hhmm,
-    room: z.string().trim().max(60).nullable().optional(),
-    kind: z.enum(["LECTURE", "LAB", "TUTORIAL", "OFFICE_HOUR", "OTHER"]).default("LECTURE"),
-    plannedTopics: z.array(z.string().trim().min(1).max(200)).max(12).optional(),
-  })
-  .refine(timeRange, { message: "endTime must be after startTime", path: ["endTime"] });
+export const sessionCreateBaseSchema = z.object({
+  courseId: z.coerce.number().int().positive().nullable().optional(),
+  courseLabel: z.string().trim().min(1).max(120),
+  section: z.string().trim().max(40).nullable().optional(),
+  date: isoDate,
+  startTime: hhmm,
+  endTime: hhmm,
+  room: z.string().trim().max(60).nullable().optional(),
+  kind: z.enum(["LECTURE", "LAB", "TUTORIAL", "OFFICE_HOUR", "OTHER"]).default("LECTURE"),
+  plannedTopics: z.array(z.string().trim().min(1).max(200)).max(12).optional(),
+});
+export const sessionCreateSchema = sessionCreateBaseSchema.refine(timeRange, { message: "endTime must be after startTime", path: ["endTime"] });
 
 export const sessionUpdateSchema = z
   .object({
@@ -99,15 +108,14 @@ export const sessionUpdateSchema = z
 
 export const cancelSchema = z.object({ reason: z.string().trim().max(255).optional() });
 
-export const rescheduleSchema = z
-  .object({
-    date: isoDate,
-    startTime: hhmm,
-    endTime: hhmm,
-    room: z.string().trim().max(60).nullable().optional(),
-    reason: z.string().trim().max(255).optional(),
-  })
-  .refine(timeRange, { message: "endTime must be after startTime", path: ["endTime"] });
+export const rescheduleBaseSchema = z.object({
+  date: isoDate,
+  startTime: hhmm,
+  endTime: hhmm,
+  room: z.string().trim().max(60).nullable().optional(),
+  reason: z.string().trim().max(255).optional(),
+});
+export const rescheduleSchema = rescheduleBaseSchema.refine(timeRange, { message: "endTime must be after startTime", path: ["endTime"] });
 
 export const logSchema = z.object({
   coveredTopics: z.array(z.string().trim().min(1).max(200)).max(20),
@@ -273,7 +281,7 @@ export const scheduleService = {
   // ---- Calendar events ----
   async listEvents(facultyId: number, termId: number) {
     await ownedTerm(facultyId, termId);
-    return prisma.calendarEvent.findMany({ where: { termId }, orderBy: { date: "asc" } });
+    return prisma.calendarEvent.findMany({ where: { termId }, orderBy: [{ date: "asc" }, { startTime: "asc" }], include: { course: { select: { id: true, courseCode: true } } } });
   },
 
   async addEvents(facultyId: number, termId: number, input: z.infer<typeof eventsBulkSchema>) {
@@ -286,10 +294,17 @@ export const scheduleService = {
       if (event.date < term.startDate || end > term.endDate) {
         throw new AppError(`Event "${event.title}" falls outside ${term.startDate} to ${term.endDate}`, 422);
       }
+      if (event.courseId) {
+        const owned = await prisma.course.findFirst({ where: { id: event.courseId, facultyId }, select: { id: true } });
+        if (!owned) throw new AppError("courseId does not belong to you", 422);
+      }
     }
-    await prisma.calendarEvent.createMany({ data: input.events.map((e) => ({ termId, ...e, endDate: e.endDate ?? null })) });
+    await prisma.calendarEvent.createMany({
+      data: input.events.map((e) => ({ termId, ...e, endDate: e.endDate ?? null, courseId: e.courseId ?? null, section: e.section ?? null, startTime: e.startTime ?? null, endTime: e.endTime ?? null })),
+    });
     const sessions = await regenerate(termId);
-    return { events: await this.listEvents(facultyId, termId), sessions };
+    const clashes = await this.clashes(facultyId, termId);
+    return { events: await this.listEvents(facultyId, termId), sessions, clashes };
   },
 
   async deleteEvent(facultyId: number, termId: number, eventId: number) {
@@ -297,6 +312,54 @@ export const scheduleService = {
     const result = await prisma.calendarEvent.deleteMany({ where: { id: eventId, termId } });
     if (!result.count) throw new AppError("Event not found", 404);
     return { id: eventId, sessions: await regenerate(termId) };
+  },
+
+  /** Assessment sanity checks across the term (see clashes.ts for the rules). */
+  async clashes(facultyId: number, termId: number) {
+    await ownedTerm(facultyId, termId);
+    const [events, sessions] = await Promise.all([
+      prisma.calendarEvent.findMany({ where: { termId }, include: { course: { select: { courseCode: true } } } }),
+      prisma.classSession.findMany({ where: { termId }, select: { id: true, date: true, startTime: true, endTime: true, status: true, courseId: true, courseLabel: true, section: true, plannedTopics: true, coveredTopics: true } }),
+    ]);
+    return detectClashes(
+      events.map((e) => ({ ...e, courseLabel: e.course?.courseCode ?? null })),
+      sessions.map((s) => ({ ...s, plannedTopics: (s.plannedTopics as string[] | null) ?? null, coveredTopics: (s.coveredTopics as string[] | null) ?? null }))
+    );
+  },
+
+  async workload(facultyId: number, termId: number) {
+    const term = await ownedTerm(facultyId, termId);
+    const sessions = await prisma.classSession.findMany({ where: { termId }, select: { date: true, startTime: true, endTime: true, status: true, courseLabel: true, section: true, kind: true } });
+    return { termId, termName: term.name, ...computeWorkload(term, sessions) };
+  },
+
+  // ---- Public calendar feed ----
+  async feedUrl(facultyId: number, termId: number, rotate = false) {
+    const term = await ownedTerm(facultyId, termId);
+    let token = term.feedToken;
+    if (!token || rotate) {
+      token = randomBytes(24).toString("hex");
+      await prisma.term.update({ where: { id: termId }, data: { feedToken: token } });
+      if (rotate) await auditService.recordAuditLog({ userId: facultyId, action: "Faculty rotated calendar feed link", document: `term:${termId}` });
+    }
+    return { termId, url: `${env.apiPublicUrl}/api/schedule/feed/${token}.ics`, rotated: rotate };
+  },
+
+  async revokeFeed(facultyId: number, termId: number) {
+    await ownedTerm(facultyId, termId);
+    await prisma.term.update({ where: { id: termId }, data: { feedToken: null } });
+    return { termId, revoked: true };
+  },
+
+  async icsByToken(token: string) {
+    if (!/^[a-f0-9]{48}$/.test(token)) throw new AppError("Calendar not found", 404);
+    const term = await prisma.term.findUnique({ where: { feedToken: token }, select: { id: true, facultyId: true } });
+    if (!term) throw new AppError("Calendar not found", 404);
+    return this.ics(term.facultyId, term.id);
+  },
+
+  freeRooms(query: Parameters<typeof departmentRoutineService.freeRooms>[0]) {
+    return departmentRoutineService.freeRooms(query);
   },
 
   // ---- Sessions ----
@@ -366,12 +429,13 @@ export const scheduleService = {
     const term = session.term;
     const from = session.date > todayIso() ? session.date : todayIso();
     const to = addDays(from, 21) <= term.endDate ? addDays(from, 21) : term.endDate;
-    const [existing, events] = await Promise.all([
+    const [existing, events, hooks] = await Promise.all([
       prisma.classSession.findMany({ where: { termId: term.id, date: { gte: from, lte: to } }, select: { id: true, date: true, startTime: true, endTime: true, status: true, section: true, courseLabel: true, room: true } }),
       prisma.calendarEvent.findMany({ where: { termId: term.id } }),
+      departmentRoutineService.availabilityHooks(),
     ]);
-    const suggestions = findFreeSlots(session, existing.filter((e) => e.id !== session.id), events, { from, to, limit: 6 });
-    return { sessionId, window: { from, to }, suggestions };
+    const suggestions = findFreeSlots(session, existing.filter((e) => e.id !== session.id), events, { from, to, limit: 6, hooks: hooks ?? undefined });
+    return { sessionId, window: { from, to }, suggestions, roomAware: Boolean(hooks) };
   },
 
   async rescheduleSession(facultyId: number, sessionId: number, input: z.infer<typeof rescheduleSchema>) {
@@ -573,17 +637,31 @@ export const scheduleService = {
 
   async ics(facultyId: number, termId: number) {
     const term = await ownedTerm(facultyId, termId);
-    const sessions = await prisma.classSession.findMany({ where: { termId, status: { in: ["SCHEDULED", "MAKEUP", "HELD", "CANCELLED"] } }, orderBy: { date: "asc" } });
-    const content = buildIcs(`AcadIQ · ${term.name}`, sessions.map((s) => ({
-      uid: `acadiq-session-${s.id}@acadiq`,
-      date: s.date,
-      startTime: s.startTime,
-      endTime: s.endTime,
-      summary: `${s.status === "CANCELLED" ? "[CANCELLED] " : s.status === "MAKEUP" ? "[MAKE-UP] " : ""}${s.courseLabel}${s.section ? ` (${s.section})` : ""}${s.kind !== "LECTURE" ? ` · ${s.kind.toLowerCase()}` : ""}`,
-      description: [(s.plannedTopics as string[] | null)?.length ? `Planned: ${(s.plannedTopics as string[]).join(", ")}` : null, s.reason ? `Note: ${s.reason}` : null].filter(Boolean).join("\n") || undefined,
-      location: s.room,
-      status: s.status === "CANCELLED" ? "CANCELLED" : "CONFIRMED",
-    })));
+    const [sessions, assessments] = await Promise.all([
+      prisma.classSession.findMany({ where: { termId, status: { in: ["SCHEDULED", "MAKEUP", "HELD", "CANCELLED"] } }, orderBy: { date: "asc" } }),
+      prisma.calendarEvent.findMany({ where: { termId, kind: "ASSESSMENT" }, include: { course: { select: { courseCode: true } } } }),
+    ]);
+    const content = buildIcs(`AcadIQ · ${term.name}`, [
+      ...sessions.map((s) => ({
+        uid: `acadiq-session-${s.id}@acadiq`,
+        date: s.date,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        summary: `${s.status === "CANCELLED" ? "[CANCELLED] " : s.status === "MAKEUP" ? "[MAKE-UP] " : ""}${s.courseLabel}${s.section ? ` (${s.section})` : ""}${s.kind !== "LECTURE" ? ` · ${s.kind.toLowerCase()}` : ""}`,
+        description: [(s.plannedTopics as string[] | null)?.length ? `Planned: ${(s.plannedTopics as string[]).join(", ")}` : null, s.reason ? `Note: ${s.reason}` : null].filter(Boolean).join("\n") || undefined,
+        location: s.room,
+        status: (s.status === "CANCELLED" ? "CANCELLED" : "CONFIRMED") as "CANCELLED" | "CONFIRMED",
+      })),
+      ...assessments.map((a) => ({
+        uid: `acadiq-assessment-${a.id}@acadiq`,
+        date: a.date,
+        startTime: a.startTime ?? "09:00",
+        endTime: a.endTime ?? "10:00",
+        summary: `[ASSESSMENT] ${a.title}${a.course ? ` · ${a.course.courseCode}` : ""}${a.section ? ` (${a.section})` : ""}`,
+        location: null,
+        status: "CONFIRMED" as const,
+      })),
+    ]);
     return { filename: `${term.name.replace(/[^\w-]+/g, "_")}.ics`, content };
   },
 };

@@ -91,3 +91,65 @@ export const uploadReferenceScheme = multer({
     }
   },
 });
+
+// Class routines: documents plus photos/scans (transcribed by the vision model).
+const ROUTINE_TYPES = new Map([
+  [".pdf", ["application/pdf"]],
+  [".docx", ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]],
+  [".txt", ["text/plain", "application/octet-stream"]],
+  [".csv", ["text/csv", "text/plain", "application/vnd.ms-excel", "application/octet-stream"]],
+  [".md", ["text/markdown", "text/plain", "application/octet-stream"]],
+  [".jpg", ["image/jpeg"]],
+  [".jpeg", ["image/jpeg"]],
+  [".png", ["image/png"]],
+  [".webp", ["image/webp"]],
+]);
+
+export const uploadRoutine = multer({
+  storage,
+  limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    const extension = path.extname(file.originalname).toLowerCase();
+    const allowed = ROUTINE_TYPES.get(extension);
+    if (!allowed || !allowed.includes(file.mimetype)) {
+      return cb(new AppError("Routine must be PDF, DOCX, TXT/CSV or a JPG/PNG/WebP photo", 400));
+    }
+    cb(null, true);
+  },
+});
+
+/**
+ * Whatever the browser's MediaRecorder produces. Chrome/Firefox emit
+ * `audio/webm;codecs=opus` and Safari `audio/mp4`, so the codec parameter is
+ * stripped before matching and the extension is ignored entirely — a recorded
+ * Blob has no meaningful filename.
+ */
+const VOICE_MIMES = new Set([
+  "audio/webm",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/mpeg",
+  "audio/mpga",
+  "audio/m4a",
+  "audio/x-m4a",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/flac",
+]);
+
+export const uploadVoiceClip = multer({
+  // Memory, not disk: the clip exists only to reach the transcription model.
+  // Voice carries more identifying information than the text it becomes, and
+  // writing it to UPLOAD_DIR would create a retention problem nothing cleans up.
+  storage: multer.memoryStorage(),
+  // Two minutes of Opus is well under 2 MB; 10 MB leaves headroom for WAV
+  // without letting a stuck recorder upload something enormous.
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    const base = file.mimetype.split(";")[0].trim().toLowerCase();
+    if (!VOICE_MIMES.has(base)) {
+      return cb(new AppError("Voice input must be a recorded audio clip (WebM, MP4, OGG, MP3 or WAV)", 400));
+    }
+    cb(null, true);
+  },
+});

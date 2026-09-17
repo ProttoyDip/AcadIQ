@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { VoiceInput, appendTranscript } from "../components/ui/voice-input";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Download, Loader2, Settings2, AlertTriangle, Plus } from "lucide-react";
 import { scheduleService } from "../services/scheduleService";
@@ -7,6 +8,7 @@ import PageHeader from "../components/layout/PageHeader";
 import WeekGrid, { STATUS_LABEL } from "../components/schedule/WeekGrid";
 import SessionDialog from "../components/schedule/SessionDialog";
 import TimetableSetup from "../components/schedule/TimetableSetup";
+import { ClashesCard, SubscribeCard, WorkloadCard } from "../components/schedule/ScheduleInsights";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
@@ -25,23 +27,28 @@ function TermForm({ onCreated }: { onCreated: (t: Term) => void }) {
   const [error, setError] = useState<string | null>(null);
   const create = useMutation({ mutationFn: () => scheduleService.createTerm(form), onSuccess: onCreated, onError: (e) => setError(apiErrorMessage(e, "Could not create term")) });
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_9rem_9rem_auto] sm:items-end">
-      <div className="flex flex-col gap-1">
+    // Name gets its own row: the two date inputs and the button need ~27rem
+    // between them, which is already the whole width of a max-w-lg dialog, so a
+    // single four-column row starved the name field and collided its label.
+    <div className="flex flex-col gap-3">
+      <div className="flex min-w-0 flex-col gap-1">
         <Label htmlFor="term-name" className="text-xs">Term name</Label>
-        <Input id="term-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Fall 2026" className="h-9" />
+        <Input id="term-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Fall 2026" className="h-9 w-full" />
       </div>
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="term-start" className="text-xs">Starts</Label>
-        <Input id="term-start" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} className="h-9" />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-1">
+          <Label htmlFor="term-start" className="text-xs">Starts</Label>
+          <Input id="term-start" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} className="h-9 w-full min-w-0" />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          <Label htmlFor="term-end" className="text-xs">Ends</Label>
+          <Input id="term-end" type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} className="h-9 w-full min-w-0" />
+        </div>
       </div>
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="term-end" className="text-xs">Ends</Label>
-        <Input id="term-end" type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} className="h-9" />
-      </div>
-      <Button onClick={() => create.mutate()} disabled={create.isPending || form.name.trim().length < 2}>
+      {error && <p className="text-xs text-error">{error}</p>}
+      <Button className="w-full sm:w-auto sm:self-end" onClick={() => create.mutate()} disabled={create.isPending || form.name.trim().length < 2}>
         {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />} Create term
       </Button>
-      {error && <p className="text-xs text-error sm:col-span-4">{error}</p>}
     </div>
   );
 }
@@ -193,8 +200,12 @@ export default function Schedule() {
                   <Button variant="link" size="sm" className="mt-1 h-auto p-0 text-xs" onClick={() => setTermId(-1)}>+ New term</Button>
                 </CardContent>
               </Card>
+              <ClashesCard termId={term.id} />
+              <SubscribeCard termId={term.id} />
             </div>
           </div>
+
+          <WorkloadCard termId={term.id} />
 
           <Dialog open={setupOpen} onOpenChange={setSetupOpen}>
             <DialogContent className="max-h-[88vh] max-w-4xl overflow-y-auto">
@@ -244,6 +255,7 @@ function QuickAddDialog({ term, initial, onClose, onSaved }: { term: Term; initi
           <Input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} className="h-9" />
           <Input type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} className="h-9" />
           <textarea placeholder="Planned topics (optional)" value={form.topics} onChange={(e) => setForm({ ...form, topics: e.target.value })} rows={2} className="col-span-2 rounded-lg border border-border bg-background p-2 text-xs" />
+          <div className="col-span-2 flex justify-end"><VoiceInput label="the planned topics" onTranscript={(t) => setForm((f) => ({ ...f, topics: appendTranscript(f.topics, t) }))} /></div>
         </div>
         {error && <p className="text-xs text-error">{error}</p>}
         <Button onClick={() => create.mutate()} disabled={create.isPending || !form.courseLabel.trim()}>

@@ -2,7 +2,7 @@ import { Router, Response, NextFunction } from "express";
 import { z } from "zod";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth.middleware";
 import { requireRole } from "../middleware/role.middleware";
-import { uploadTeachingMaterial } from "../middleware/upload.middleware";
+import { uploadRoutine } from "../middleware/upload.middleware";
 import { success } from "../utils/apiResponse";
 import { parsePositiveId } from "../utils/parseId";
 import {
@@ -21,7 +21,23 @@ import {
   termUpdateSchema,
 } from "../services/schedule/schedule.service";
 import { routineImportService } from "../services/schedule/routineImport.service";
+import { digestPrefsSchema, digestService } from "../services/schedule/digest.service";
+import { departmentRoutineService, freeRoomsQuerySchema } from "../services/schedule/departmentRoutine.service";
 import { AppError } from "../middleware/error.middleware";
+
+/** No auth: the token IS the credential (48 hex chars, rotatable). Mounted before the protected router. */
+export const scheduleFeedRouter = Router();
+scheduleFeedRouter.get("/feed/:token.ics", async (req, res, next) => {
+  try {
+    const { filename, content } = await scheduleService.icsByToken(String(req.params.token));
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+    res.setHeader("Cache-Control", "no-cache");
+    res.status(200).send(content);
+  } catch (err) {
+    next(err);
+  }
+});
 
 const router = Router();
 router.use(authenticate, requireRole("FACULTY"));
@@ -46,6 +62,20 @@ router.patch(
   wrap(async (req, res) => success(res, await scheduleService.updateTerm(uid(req), termId(req), termUpdateSchema.parse(req.body))))
 );
 router.delete("/terms/:termId", wrap(async (req, res) => success(res, await scheduleService.deleteTerm(uid(req), termId(req)))));
+router.get("/terms/:termId/feed-url", wrap(async (req, res) => success(res, await scheduleService.feedUrl(uid(req), termId(req), req.query.rotate === "true"))));
+router.delete("/terms/:termId/feed-url", wrap(async (req, res) => success(res, await scheduleService.revokeFeed(uid(req), termId(req)))));
+router.get("/terms/:termId/clashes", wrap(async (req, res) => success(res, await scheduleService.clashes(uid(req), termId(req)))));
+router.get("/terms/:termId/workload", wrap(async (req, res) => success(res, await scheduleService.workload(uid(req), termId(req)))));
+
+// Daily digest email
+router.get("/digest/prefs", wrap(async (req, res) => success(res, await digestService.getPrefs(uid(req)))));
+router.patch("/digest/prefs", wrap(async (req, res) => success(res, await digestService.updatePrefs(uid(req), digestPrefsSchema.parse(req.body)))));
+router.get("/digest/preview", wrap(async (req, res) => success(res, await digestService.preview(uid(req), typeof req.query.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date) ? req.query.date : undefined))));
+router.post("/digest/send-now", wrap(async (req, res) => success(res, await digestService.sendNow(uid(req)))));
+
+// Rooms (department routine)
+router.get("/rooms/free", wrap(async (req, res) => success(res, await departmentRoutineService.freeRooms(freeRoomsQuerySchema.parse(req.query)))));
+router.get("/rooms/available", wrap(async (_req, res) => success(res, { available: await departmentRoutineService.hasData() })));
 
 // Slots
 router.get("/terms/:termId/slots", wrap(async (req, res) => success(res, await scheduleService.listSlots(uid(req), termId(req)))));
@@ -55,11 +85,13 @@ router.delete("/terms/:termId/slots/:slotId", wrap(async (req, res) => success(r
 // Routine import (AI extraction; review before saving)
 router.post(
   "/routine/extract",
-  uploadTeachingMaterial.single("file"),
+  uploadRoutine.single("file"),
   wrap(async (req, res) => {
     if (!req.file) throw new AppError("Routine file is required", 400);
-    const options = z.object({ facultyName: z.string().trim().max(120).optional(), initials: z.string().trim().max(12).optional() }).parse(req.body ?? {});
-    return success(res, await routineImportService.extract(uid(req), req.file, options));
+    const options = z
+      .object({ facultyName: z.string().trim().max(120).optional(), initials: z.string().trim().max(12).optional(), allRowsAreMine: z.enum(["true", "false"]).optional() })
+      .parse(req.body ?? {});
+    return success(res, await routineImportService.extract(uid(req), req.file, { facultyName: options.facultyName, initials: options.initials, allRowsAreMine: options.allRowsAreMine === "true" }));
   })
 );
 

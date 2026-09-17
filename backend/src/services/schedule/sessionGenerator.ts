@@ -110,6 +110,13 @@ export interface FreeSlotCandidate {
   reasons: string[];
 }
 
+/** Optional department-level knowledge (rooms/sections of other teachers). */
+export interface AvailabilityHooks {
+  roomBusy?: (date: string, startTime: string, endTime: string, room: string | null) => boolean;
+  sectionBusy?: (date: string, startTime: string, endTime: string, section: string | null, courseLabel: string) => boolean;
+  freeRoomAt?: (date: string, startTime: string, endTime: string) => string | null;
+}
+
 /**
  * Deterministic make-up finder. Candidates are the faculty's own weekday grid
  * (08:00–18:00, aligned to the cancelled session's length); each is rejected if it
@@ -120,8 +127,9 @@ export function findFreeSlots(
   cancelled: { date: string; startTime: string; endTime: string; section: string | null; courseLabel: string; room: string | null },
   existing: ExistingSession[],
   events: BlockedDay[],
-  options: { from: string; to: string; limit?: number; dayStart?: string; dayEnd?: string; stepMinutes?: number; excludeDays?: number[] } 
+  options: { from: string; to: string; limit?: number; dayStart?: string; dayEnd?: string; stepMinutes?: number; excludeDays?: number[]; hooks?: AvailabilityHooks } 
 ): FreeSlotCandidate[] {
+  const hooks = options.hooks ?? {};
   const limit = options.limit ?? 6;
   const step = options.stepMinutes ?? 30;
   const dayStart = options.dayStart ?? "08:00";
@@ -175,7 +183,19 @@ export function findFreeSlots(
         reasons.push("back-to-back with an existing class");
       }
       if (dayItems.length === 0) reasons.push("otherwise free day");
-      candidates.push({ date, startTime, endTime, room: cancelled.room, score: Math.round(score), reasons });
+      // Department routine, when available: the section must be free; keep the room if free, else propose another.
+      if (hooks.sectionBusy?.(date, startTime, endTime, cancelled.section, cancelled.courseLabel)) continue;
+      let room = cancelled.room;
+      if (room && hooks.roomBusy?.(date, startTime, endTime, room)) {
+        const alternative = hooks.freeRoomAt?.(date, startTime, endTime) ?? null;
+        if (!alternative) continue;
+        room = alternative;
+        score -= 5;
+        reasons.push(`${cancelled.room} is taken; ${alternative} is free`);
+      } else if (room && hooks.roomBusy) {
+        reasons.push(`${room} is free`);
+      }
+      candidates.push({ date, startTime, endTime, room, score: Math.round(score), reasons });
     }
   }
   // Best score per date first, then diversify across dates so the list isn't 6 half-hours of one day.

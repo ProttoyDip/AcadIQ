@@ -80,3 +80,20 @@ export function todayIso(now = new Date()): string {
   // Local calendar date of the server; callers may pass the client's date instead.
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
+
+export function isValidTimeZone(zone: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Calendar date and hour of `now` in an IANA zone; falls back to server local when the zone is missing/invalid. */
+export function localClock(now: Date, zone: string | null | undefined): { date: string; hour: number } {
+  if (!zone || !isValidTimeZone(zone)) return { date: todayIso(now), hour: now.getHours() };
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hour12: false }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  return { date: `${get("year")}-${get("month")}-${get("day")}`, hour: Number(get("hour")) % 24 };
+}

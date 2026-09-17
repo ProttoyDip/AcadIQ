@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { VoiceInput, appendTranscript } from "../ui/voice-input";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, CalendarClock, CheckCircle2, ClipboardCheck, Copy, Loader2, MessageSquareText, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { scheduleService } from "../../services/scheduleService";
@@ -76,6 +77,12 @@ export default function SessionDialog({ session, onClose }: { session: ClassSess
     onError: fail("Could not save"),
   });
   const notice = useMutation({ mutationFn: () => scheduleService.notice(session!.id, channel), onError: fail("Could not draft a notice") });
+  const roomsAvailable = useQuery({ queryKey: ["schedule", "rooms-available"], queryFn: scheduleService.roomsAvailable, staleTime: 5 * 60_000 });
+  const freeRooms = useQuery({
+    queryKey: ["schedule", "free-rooms", manual.date, manual.startTime, manual.endTime],
+    queryFn: () => scheduleService.freeRooms({ date: manual.date, startTime: manual.startTime, endTime: manual.endTime }),
+    enabled: mode === "reschedule" && Boolean(roomsAvailable.data?.available) && Boolean(manual.date && manual.startTime && manual.endTime && manual.endTime > manual.startTime),
+  });
 
   if (!session) return null;
   const s = session;
@@ -216,6 +223,13 @@ export default function SessionDialog({ session, onClose }: { session: ClassSess
                 <Input placeholder="Room" value={manual.room} onChange={(e) => setManual({ ...manual, room: e.target.value })} className="h-9" />
               </div>
               <Input className="mt-2 h-9" placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} />
+              {freeRooms.data && freeRooms.data.source !== "NONE" && (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Free rooms then: {freeRooms.data.free.length ? freeRooms.data.free.slice(0, 8).map((r) => (
+                    <button key={r} type="button" onClick={() => setManual({ ...manual, room: r })} className={cn("mr-1 rounded border px-1.5 py-0.5", manual.room === r ? "border-primary text-primary" : "border-border hover:border-primary")}>{r}</button>
+                  )) : "none in the department routine"}
+                </p>
+              )}
               <div className="mt-2 flex gap-2">
                 <Button size="sm" onClick={() => reschedule.mutate({ ...manual, room: manual.room || null })} disabled={reschedule.isPending || !manual.date || !manual.startTime || !manual.endTime}>
                   {reschedule.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarClock className="h-4 w-4" />} Move class
@@ -231,11 +245,13 @@ export default function SessionDialog({ session, onClose }: { session: ClassSess
             <div className="flex flex-col gap-1">
               <Label className="text-xs">Topics covered (one per line)</Label>
               <textarea value={covered} onChange={(e) => setCovered(e.target.value)} rows={4} className="w-full rounded-lg border border-border bg-background p-2 text-xs" />
+              <div className="mt-1 flex justify-end"><VoiceInput label="covered topics" onTranscript={(t) => setCovered((v) => appendTranscript(v, t))} /></div>
               {s.plannedTopics?.length ? <p className="text-[11px] text-muted-foreground">Pre-filled from the plan — remove what you did not reach.</p> : null}
             </div>
             <div className="flex flex-col gap-1">
               <Label className="text-xs">Notes (optional)</Label>
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full rounded-lg border border-border bg-background p-2 text-xs" placeholder="Students struggled with…, ran out of time for…" />
+              <div className="mt-1 flex justify-end"><VoiceInput label="the class notes" onTranscript={(t) => setNotes((v) => appendTranscript(v, t))} /></div>
             </div>
             <div className="flex gap-2">
               <Button size="sm" onClick={() => log.mutate()} disabled={log.isPending}>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { VoiceInput, appendTranscript } from "../components/ui/voice-input";
 import { useQuery } from "@tanstack/react-query";
 import { Library, Search, Sparkles, Repeat } from "lucide-react";
 import { useCourses } from "../hooks/useCourses";
@@ -82,6 +83,7 @@ export default function QuestionBank() {
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input id="qb-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. normalisation" className="pl-9" />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2"><VoiceInput label="the search phrase" onTranscript={(t) => setQ(t)} /></span>
             </div>
           </div>
           <div className="flex flex-col gap-1">
@@ -167,6 +169,7 @@ export default function QuestionBank() {
             <DialogTitle>Rewrite a pasted question</DialogTitle>
             <DialogDescription>Not stored anywhere; useful while drafting.</DialogDescription>
           </DialogHeader>
+          <div className="flex justify-end"><VoiceInput label="the question text" onTranscript={(t) => setAdhoc((v) => appendTranscript(v, t))} /></div>
           <textarea
             value={adhoc}
             onChange={(e) => setAdhoc(e.target.value)}

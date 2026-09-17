@@ -1,13 +1,13 @@
 import { promises as fs } from "node:fs";
 import { prisma } from "../../database/prismaClient";
 import { AppError } from "../../middleware/error.middleware";
-import { extractDocumentText } from "../../ai/documentTextExtractor";
 import { runLlmAnalysis } from "../../ai/runner";
 import { ROUTINE_EXTRACT_PROMPT } from "../../ai/prompts/timetable.prompt";
 import { routineExtractResponseSchema } from "../../ai/schemas/facultyWorkflows.schema";
 import { tracedAnalysis } from "../traced";
 import { env } from "../../config/env";
 import { toMinutes } from "./dates";
+import { routineFileToText } from "./routineSource";
 
 const MAX_ROUTINE_CHARS = Math.min(env.syllabusPromptChars, 24_000);
 
@@ -16,13 +16,18 @@ const MAX_ROUTINE_CHARS = Math.min(env.syllabusPromptChars, 24_000);
  * the faculty reviews/corrects the grid and then calls saveSlots.
  */
 export const routineImportService = {
-  extract(facultyId: number, file: { path: string; mimetype: string; originalname: string }, options: { facultyName?: string; initials?: string }) {
+  extract(
+    facultyId: number,
+    file: { path: string; mimetype: string; originalname: string },
+    options: { facultyName?: string; initials?: string; keepFile?: boolean; /** The document is the faculty's own routine: keep every row. */ allRowsAreMine?: boolean }
+  ) {
     return tracedAnalysis(async () => {
       let text: string;
+      let method: "DOCUMENT" | "VISION";
       try {
-        text = await extractDocumentText(file.path, file.mimetype);
+        ({ text, method } = await routineFileToText(file));
       } finally {
-        await fs.unlink(file.path).catch(() => undefined);
+        if (!options.keepFile) await fs.unlink(file.path).catch(() => undefined);
       }
       if (text.length > MAX_ROUTINE_CHARS) text = `${text.slice(0, MAX_ROUTINE_CHARS)}\n[Routine truncated to ${MAX_ROUTINE_CHARS} characters]`;
 
@@ -32,10 +37,21 @@ export const routineImportService = {
       ]);
       const facultyName = options.facultyName?.trim() || user.name;
       const initials = options.initials?.trim() || facultyName.split(/\s+/).map((w) => w[0]?.toUpperCase() ?? "").join("");
+      // A personal routine has no teacher column: if neither the name nor the initials occur
+      // anywhere in the document, filtering would drop everything, so treat all rows as theirs.
+      const haystack = text.toUpperCase();
+      const surname = facultyName.split(/\s+/).pop()?.toUpperCase() ?? "";
+      const nameAppears =
+        haystack.includes(facultyName.toUpperCase()) ||
+        (surname.length > 2 && haystack.includes(surname)) ||
+        (initials.length >= 2 && new RegExp(`(^|[^A-Z])${initials.replace(/[^A-Z]/g, "")}([^A-Z]|$)`).test(haystack));
+      const personal = Boolean(options.allRowsAreMine) || !nameAppears;
+      const warnings: string[] = [];
+      if (personal && !options.allRowsAreMine) warnings.push(`"${facultyName}" / "${initials}" does not appear in the document, so every class row was treated as yours.`);
 
       const { consensus } = await runLlmAnalysis(
         ROUTINE_EXTRACT_PROMPT,
-        [{ text, facultyName, facultyInitials: initials, knownCourses: courses.map((c) => ({ code: c.courseCode, name: c.courseName })) }],
+        [{ text, scope: personal ? "PERSONAL" : "FACULTY", facultyName, facultyInitials: initials, knownCourses: courses.map((c) => ({ code: c.courseCode, name: c.courseName })) }],
         routineExtractResponseSchema,
         { cache: false }
       );
@@ -48,17 +64,26 @@ export const routineImportService = {
           return { ...s, courseId: match?.id ?? null, matchedCourse: match ? `${match.courseCode} — ${match.courseName}` : null, source: "AI_IMPORT" as const };
         })
         .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
-      if (!slots.length) throw new AppError(`No classes for "${facultyName}" (${initials}) were found in ${file.originalname}. Check the name/initials filter or add slots manually.`, 422);
+      if (!slots.length) {
+        throw new AppError(
+          personal
+            ? `No class rows could be read from ${file.originalname}. Try a sharper photo or a PDF, or add slots manually.`
+            : `No classes for "${facultyName}" (${initials}) were found in ${file.originalname}. If this routine is only yours, tick "all classes are mine"; otherwise check the initials.`,
+          422
+        );
+      }
 
       return {
         file: file.originalname,
         facultyName,
         initials,
+        scope: personal ? ("PERSONAL" as const) : ("FACULTY" as const),
         slots,
         termHint: consensus.termHint ?? null,
-        warnings: consensus.warnings ?? [],
+        warnings: [...warnings, ...(consensus.warnings ?? [])],
         lowConfidence: slots.filter((s) => s.confidence < 60).length,
         textChars: text.length,
+        method,
       };
     });
   },

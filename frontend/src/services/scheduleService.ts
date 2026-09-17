@@ -1,9 +1,15 @@
 import { api } from "./api";
 import {
   CalendarEvent,
+  Clash,
   ClassNotice,
   ClassSession,
   ClassSlot,
+  DepartmentRoutine,
+  DepartmentSlot,
+  DigestPrefs,
+  DigestPreview,
+  FreeRoomsResult,
   FreeSlotCandidate,
   MakeupDebt,
   PaceReport,
@@ -12,6 +18,7 @@ import {
   SlotDraft,
   Term,
   TodayBriefing,
+  WorkloadReport,
 } from "../types";
 
 const unwrap = <T>(p: Promise<{ data: { data: T } }>) => p.then((r) => r.data.data);
@@ -28,17 +35,18 @@ export const scheduleService = {
     unwrap(api.post<{ data: { slots: ClassSlot[]; sessions: number } }>(`/schedule/terms/${termId}/slots`, { slots, replace })),
   deleteSlot: (termId: number, slotId: number) => unwrap(api.delete<{ data: { id: number } }>(`/schedule/terms/${termId}/slots/${slotId}`)),
 
-  extractRoutine: (file: File, options: { facultyName?: string; initials?: string } = {}) => {
+  extractRoutine: (file: File, options: { facultyName?: string; initials?: string; allRowsAreMine?: boolean } = {}) => {
     const form = new FormData();
     form.append("file", file);
     if (options.facultyName) form.append("facultyName", options.facultyName);
     if (options.initials) form.append("initials", options.initials);
+    if (options.allRowsAreMine) form.append("allRowsAreMine", "true");
     return unwrap(api.post<{ data: RoutineExtractResult }>("/schedule/routine/extract", form, { headers: { "Content-Type": "multipart/form-data" } }));
   },
 
   listEvents: (termId: number) => unwrap(api.get<{ data: CalendarEvent[] }>(`/schedule/terms/${termId}/events`)),
-  addEvents: (termId: number, events: Array<{ date: string; endDate?: string | null; kind: CalendarEvent["kind"]; title: string }>) =>
-    unwrap(api.post<{ data: { events: CalendarEvent[]; sessions: number } }>(`/schedule/terms/${termId}/events`, { events })),
+  addEvents: (termId: number, events: Array<{ date: string; endDate?: string | null; kind: CalendarEvent["kind"]; title: string; courseId?: number | null; section?: string | null; startTime?: string | null; endTime?: string | null }>) =>
+    unwrap(api.post<{ data: { events: CalendarEvent[]; sessions: number; clashes: Clash[] } }>(`/schedule/terms/${termId}/events`, { events })),
   deleteEvent: (termId: number, eventId: number) => unwrap(api.delete<{ data: { id: number } }>(`/schedule/terms/${termId}/events/${eventId}`)),
 
   listSessions: (termId: number, params: { from?: string; to?: string; courseId?: number } = {}) =>
@@ -63,4 +71,28 @@ export const scheduleService = {
   pace: (courseId: number) => unwrap(api.get<{ data: PaceReport }>(`/schedule/pace/${courseId}`)),
   replan: (courseId: number, note?: string, apply = false) => unwrap(api.post<{ data: ReplanResult }>("/schedule/replan", { courseId, note, apply })),
   ics: (termId: number) => api.get<string>(`/schedule/terms/${termId}/calendar.ics`, { responseType: "text" }).then((r) => r.data),
+
+  // Phase 4
+  feedUrl: (termId: number, rotate = false) => unwrap(api.get<{ data: { termId: number; url: string; rotated: boolean } }>(`/schedule/terms/${termId}/feed-url`, { params: rotate ? { rotate: "true" } : {} })),
+  revokeFeed: (termId: number) => unwrap(api.delete<{ data: { revoked: boolean } }>(`/schedule/terms/${termId}/feed-url`)),
+  clashes: (termId: number) => unwrap(api.get<{ data: Clash[] }>(`/schedule/terms/${termId}/clashes`)),
+  workload: (termId: number) => unwrap(api.get<{ data: WorkloadReport }>(`/schedule/terms/${termId}/workload`)),
+  digestPrefs: () => unwrap(api.get<{ data: DigestPrefs }>("/schedule/digest/prefs")),
+  updateDigestPrefs: (payload: { digestEnabled?: boolean; digestHour?: number; timezone?: string | null }) => unwrap(api.patch<{ data: DigestPrefs }>("/schedule/digest/prefs", payload)),
+  digestPreview: () => unwrap(api.get<{ data: DigestPreview }>("/schedule/digest/preview")),
+  digestSendNow: () => unwrap(api.post<{ data: { sent: boolean; to: string; subject: string } }>("/schedule/digest/send-now")),
+  freeRooms: (params: { date: string; startTime: string; endTime: string }) => unwrap(api.get<{ data: FreeRoomsResult }>("/schedule/rooms/free", { params })),
+  roomsAvailable: () => unwrap(api.get<{ data: { available: boolean } }>("/schedule/rooms/available")),
+
+  // Admin: department routine
+  listDepartmentRoutines: () => unwrap(api.get<{ data: DepartmentRoutine[] }>("/admin/department-routine")),
+  departmentSlots: (routineId: number) => unwrap(api.get<{ data: DepartmentSlot[] }>(`/admin/department-routine/${routineId}/slots`)),
+  importDepartmentRoutine: (file: File, termLabel: string, replace = true) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("termLabel", termLabel);
+    form.append("replace", String(replace));
+    return unwrap(api.post<{ data: DepartmentRoutine & { warnings: string[]; rooms: number; teachers: number } }>("/admin/department-routine", form, { headers: { "Content-Type": "multipart/form-data" } }));
+  },
+  deleteDepartmentRoutine: (routineId: number) => unwrap(api.delete<{ data: { id: number } }>(`/admin/department-routine/${routineId}`)),
 };

@@ -6,6 +6,7 @@ import { courseRepository } from "../repositories/course.repository";
 import { reportPdfService } from "./reportPdf.service";
 import { rubricService, RubricCriteria } from "./rubric.service";
 import { blueprintService } from "./blueprint.service";
+import { computeWorkload } from "./schedule/workload";
 import { logger } from "../utils/logger";
 import { auditService } from "./audit.service";
 
@@ -117,6 +118,23 @@ export const courseFileService = {
       for (const w of json.weeks ?? []) lines.push(`| ${w.week} | ${w.title} | ${w.topics.join("; ")} | ${w.outcomes.join(", ")} | ${w.assessment ?? ""} |`);
       zip.file("05-lecture-plan/lecture-plan.md", lines.join("\n"));
       index.push("- 05-lecture-plan/lecture-plan.md");
+    }
+
+    // 6. Delivery record: every dated class for this course in the active term + workload summary.
+    const term = await prisma.term.findFirst({ where: { facultyId, isActive: true } });
+    if (term) {
+      const sessions = await prisma.classSession.findMany({ where: { termId: term.id, courseId }, orderBy: [{ date: "asc" }, { startTime: "asc" }] });
+      if (sessions.length) {
+        const csv = [
+          "date,start,end,room,status,planned_topics,covered_topics,notes",
+          ...sessions.map((s) => [s.date, s.startTime, s.endTime, s.room ?? "", s.status, JSON.stringify(((s.plannedTopics as string[] | null) ?? []).join("; ")), JSON.stringify(((s.coveredTopics as string[] | null) ?? []).join("; ")), JSON.stringify(s.notes ?? "")].join(",")),
+        ].join("\n");
+        zip.file(`06-schedule/${safe(term.name)}-sessions.csv`, csv);
+        index.push(`- 06-schedule/${safe(term.name)}-sessions.csv (${sessions.length} classes)`);
+        const all = await prisma.classSession.findMany({ where: { termId: term.id }, select: { date: true, startTime: true, endTime: true, status: true, courseLabel: true, section: true, kind: true } });
+        zip.file("06-schedule/workload.json", JSON.stringify({ term: term.name, ...computeWorkload(term, all) }, null, 2));
+        index.push("- 06-schedule/workload.json");
+      }
     }
 
     if (missing.length) index.push("", "## Not included (file missing on server)", ...missing.map((m) => `- ${m}`));

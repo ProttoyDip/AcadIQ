@@ -1,20 +1,43 @@
 import axios from "axios";
 import { useAuthStore } from "../store/authStore";
+import { useAiPreferencesStore } from "../store/aiPreferencesStore";
+import type { AiResponseMetadata } from "../types/ai";
+
+declare module "axios" {
+  interface InternalAxiosRequestConfig {
+    aiRequestUserId?: number;
+    aiRequestToken?: string;
+  }
+}
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:5000/api",
 });
 
 api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().token;
+  const { token, user } = useAuthStore.getState();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+    config.aiRequestUserId = user?.id;
+    config.aiRequestToken = token;
+    const { modelId, allowFallback } = useAiPreferencesStore.getState();
+    config.headers["X-AI-Model"] = modelId;
+    config.headers["X-AI-Fallback"] = String(modelId === "auto" || allowFallback);
   }
   return config;
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const { token, user } = useAuthStore.getState();
+    const metadata = response.data?.ai as AiResponseMetadata | undefined;
+    // A late response from a previous login must not appear in this account.
+    if (metadata && Array.isArray(metadata.usedModels) && user &&
+      response.config.aiRequestUserId === user.id && response.config.aiRequestToken === token) {
+      useAiPreferencesStore.getState().recordResponse(user.id, metadata);
+    }
+    return response;
+  },
   (error) => {
     if (error.response?.status === 401) {
       useAuthStore.getState().logout();

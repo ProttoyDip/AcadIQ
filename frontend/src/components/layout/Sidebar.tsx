@@ -3,12 +3,15 @@ import { motion } from "framer-motion";
 import { GraduationCap, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useUiStore } from "../../store/uiStore";
-import { navGroups } from "./navigation";
+import { navGroupsFor } from "./navigation";
+import { useAuth } from "../../hooks/useAuth";
 
 
 
 export default function Sidebar() {
   const { sidebarCollapsed, toggleSidebar } = useUiStore();
+  const { user } = useAuth();
+  const navGroups = navGroupsFor(user?.role);
 
   return (
     <aside

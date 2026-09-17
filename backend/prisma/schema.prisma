@@ -40,6 +40,11 @@ model User {
   email               String               @unique @db.VarChar(191)
   password            String               @db.VarChar(255)
   role                Role                 @default(FACULTY)
+  digestEnabled       Boolean              @default(false) @map("digest_enabled")
+  digestHour          Int                  @default(7) @map("digest_hour")
+  digestLastSent      String?              @map("digest_last_sent") @db.Char(10)
+  /// IANA zone (e.g. Asia/Dhaka); null = server local. Drives the digest hour and "today".
+  timezone            String?              @db.VarChar(60)
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
   facultyProfile      FacultyProfile?
@@ -54,6 +59,7 @@ model User {
   terms               Term[]
   aiDocuments         Document[]
   generatedQuestions  GeneratedQuestion[]
+  departmentRoutines  DepartmentRoutine[]
 
   @@map("users")
 }
@@ -90,6 +96,7 @@ model Course {
   lecturePlans      LecturePlan[]
   classSlots        ClassSlot[]
   classSessions     ClassSession[]
+  calendarEvents    CalendarEvent[]
 
   @@unique([facultyId, courseCode])
   @@index([facultyId])
@@ -237,6 +244,8 @@ model Term {
   startDate String          @map("start_date") @db.Char(10)
   endDate   String          @map("end_date") @db.Char(10)
   isActive  Boolean         @default(true) @map("is_active")
+  /// Secret for the public read-only .ics feed; null until the faculty asks for a subscribe link.
+  feedToken String?         @unique @map("feed_token") @db.Char(48)
   createdAt DateTime        @default(now()) @map("created_at")
   faculty   User            @relation(fields: [facultyId], references: [id], onDelete: Cascade)
   slots     ClassSlot[]
@@ -304,20 +313,57 @@ model ClassSession {
   @@map("class_sessions")
 }
 
-/// Holidays, exam weeks and deadlines that block or annotate days.
+/// Holidays, exam weeks, deadlines and assessments (quiz/mid/final) that block or annotate days.
 model CalendarEvent {
   id        Int      @id @default(autoincrement())
   termId    Int      @map("term_id")
+  courseId  Int?     @map("course_id")
+  section   String?  @db.VarChar(40)
   date      String   @db.Char(10)
   endDate   String?  @map("end_date") @db.Char(10)
-  kind      String   @db.VarChar(20) // HOLIDAY | EXAM_WEEK | DEADLINE | OTHER
+  startTime String?  @map("start_time") @db.Char(5)
+  endTime   String?  @map("end_time") @db.Char(5)
+  kind      String   @db.VarChar(20) // HOLIDAY | EXAM_WEEK | DEADLINE | ASSESSMENT | OTHER
   title     String   @db.VarChar(160)
   source    String   @default("MANUAL") @db.VarChar(20)
   createdAt DateTime @default(now()) @map("created_at")
   term      Term     @relation(fields: [termId], references: [id], onDelete: Cascade)
+  course    Course?  @relation(fields: [courseId], references: [id], onDelete: SetNull)
 
   @@index([termId, date])
   @@map("calendar_events")
+}
+
+/// Department-wide timetable uploaded by an admin; powers free-room lookup and section clash checks.
+model DepartmentRoutine {
+  id           Int              @id @default(autoincrement())
+  uploadedById Int              @map("uploaded_by_id")
+  termLabel    String           @map("term_label") @db.VarChar(80)
+  originalName String           @map("original_name") @db.VarChar(255)
+  slotCount    Int              @default(0) @map("slot_count")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  uploadedBy   User             @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  slots        DepartmentSlot[]
+
+  @@map("department_routines")
+}
+
+model DepartmentSlot {
+  id          Int               @id @default(autoincrement())
+  routineId   Int               @map("routine_id")
+  courseLabel String            @map("course_label") @db.VarChar(120)
+  section     String?           @db.VarChar(40)
+  teacher     String?           @db.VarChar(80)
+  dayOfWeek   Int               @map("day_of_week")
+  startTime   String            @map("start_time") @db.Char(5)
+  endTime     String            @map("end_time") @db.Char(5)
+  room        String?           @db.VarChar(60)
+  kind        String            @default("LECTURE") @db.VarChar(20)
+  routine     DepartmentRoutine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  @@index([routineId, dayOfWeek])
+  @@index([room])
+  @@map("department_slots")
 }
 
 model Question {

@@ -13,6 +13,7 @@ import { imageAnalysisService } from "../services/vision/imageAnalysis.service";
 import { courseParserService } from "../services/question/courseParser.service";
 import { questionGeneratorService } from "../services/question/questionGenerator.service";
 import { ollamaService } from "../services/ollama/ollama.service";
+import { getModelCatalog } from "../ai/providers";
 import {
   pdfSummarizeSchema,
   pdfAskSchema,
@@ -27,6 +28,18 @@ async function unlinkSafely(path?: string) {
 }
 
 export const aiController = {
+  /**
+   * Allowlisted chat model catalogue for the model picker. Credentials and
+   * endpoints stay server-side; only provider/model identifiers are returned.
+   */
+  async listModels(_req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      return success(res, getModelCatalog());
+    } catch (error) {
+      next(error);
+    }
+  },
+
   /**
    * Check Ollama status and model readiness.
    */

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { VoiceInput, appendTranscript } from "../ui/voice-input";
 import { useMutation } from "@tanstack/react-query";
 import { Copy, Loader2, Sparkles } from "lucide-react";
 import { workflowService } from "../../services/workflowService";
@@ -99,6 +100,9 @@ export default function QuestionRewriter({
         {mode === "CUSTOM" && (
           <div className="flex flex-col gap-1 sm:col-span-2">
             <Label htmlFor="rw-instruction" className="text-xs">Instruction</Label>
+            <div className="mb-1 flex justify-end">
+              <VoiceInput label="the rewrite instruction" onTranscript={(t) => setInstruction((v) => appendTranscript(v, t))} />
+            </div>
             <textarea
               id="rw-instruction"
               value={instruction}

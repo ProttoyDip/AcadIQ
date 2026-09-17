@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { copilotService, CopilotChatPayload } from "../services/copilotService";
+import { copilotService, CopilotChatPayload, CopilotVoicePayload } from "../services/copilotService";
 
 export const copilotKeys = {
   sessions: (courseId?: number) => ["copilot", "sessions", courseId ?? "all"] as const,
@@ -11,6 +11,17 @@ export function useCopilotSession(id: number | null) {
     queryKey: copilotKeys.session(id ?? 0),
     queryFn: () => copilotService.getSession(id as number),
     enabled: id !== null,
+  });
+}
+
+export function useCopilotVoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ payload, clip }: { payload: CopilotVoicePayload; clip: Blob }) => copilotService.voice(payload, clip),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: copilotKeys.session(data.sessionId) });
+      queryClient.invalidateQueries({ queryKey: copilotKeys.sessions(data.courseId) });
+    },
   });
 }
 

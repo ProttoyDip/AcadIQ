@@ -1,0 +1,64 @@
+*** Begin Patch
+*** Update File: frontend/src/services/api.ts
+@@
+ import { useAuthStore } from "../store/authStore";
++import { useAiPreferencesStore } from "../store/aiPreferencesStore";
++import type { AiResponseMetadata } from "../types/ai";
++
++declare module "axios" {
++  interface InternalAxiosRequestConfig {
++    aiRequestUserId?: number;
++    aiRequestToken?: string;
++  }
++}
+@@
+-  const token = useAuthStore.getState().token;
++  const { token, user } = useAuthStore.getState();
+   if (token) {
+     config.headers.Authorization = `Bearer ${token}`;
++    config.aiRequestUserId = user?.id;
++    config.aiRequestToken = token;
++    const { modelId, allowFallback } = useAiPreferencesStore.getState();
++    config.headers["X-AI-Model"] = modelId;
++    config.headers["X-AI-Fallback"] = String(modelId === "auto" || allowFallback);
+   }
+@@
+-  (response) => response,
++  (response) => {
++    const { token, user } = useAuthStore.getState();
++    const metadata = response.data?.ai as AiResponseMetadata | undefined;
++    // A late response from a previous login must not appear in this account.
++    if (metadata && Array.isArray(metadata.usedModels) && user &&
++      response.config.aiRequestUserId === user.id && response.config.aiRequestToken === token) {
++      useAiPreferencesStore.getState().recordResponse(user.id, metadata);
++    }
++    return response;
++  },
+*** Update File: frontend/src/pages/Settings.tsx
+@@
+ import { cn } from "../lib/utils";
++import AiModelSelector from "../components/ai/AiModelSelector";
+@@
+       <PageHeader title="Settings" description="Manage your AcadIQ profile and preferences." />
++
++      <Card>
++        <CardHeader>
++          <CardTitle className="text-body font-semibold">AI model preferences</CardTitle>
++          <CardDescription>Choose a model or let AcadIQ switch between available providers.</CardDescription>
++        </CardHeader>
++        <CardContent>
++          <AiModelSelector />
++        </CardContent>
++      </Card>
+*** Update File: frontend/src/components/copilot/CopilotPanel.tsx
+@@
+ import { CopilotRetrieval } from "../../types";
++import AiModelSelector from "../ai/AiModelSelector";
+@@
+-      <div className="border-b border-border">
++      <div className="shrink-0 border-b border-border px-4 py-3">
++        <AiModelSelector compact disabled={chat.isPending} />
++      </div>
++
++      <div className="border-b border-border">
+*** End Patch

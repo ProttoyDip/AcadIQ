@@ -17,6 +17,7 @@ import QuestionMemory from "./pages/QuestionMemory";
 import PaperGenerator from "./pages/PaperGenerator";
 import QuestionBank from "./pages/QuestionBank";
 import Schedule from "./pages/Schedule";
+import AdminDepartmentRoutine from "./pages/AdminDepartmentRoutine";
 import Settings from "./pages/Settings";
 import DualEvaluatorPage from "./pages/DualEvaluatorPage";
 import AdminUsers from "./pages/AdminUsers";
@@ -70,6 +71,7 @@ export default function App() {
         <Route element={<ProtectedRoute role="ADMIN" />}>
           <Route element={<AppShell />}>
             <Route path="/admin/users" element={<AdminUsers />} />
+            <Route path="/admin/routine" element={<AdminDepartmentRoutine />} />
           </Route>
         </Route>
 

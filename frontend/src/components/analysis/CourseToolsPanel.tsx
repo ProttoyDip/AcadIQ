@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { VoiceInput, appendTranscript } from "../ui/voice-input";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, FolderArchive, Loader2, SearchCheck, Trash2, Wand2 } from "lucide-react";
 import { workflowService } from "../../services/workflowService";
@@ -52,7 +53,10 @@ function LecturePlanTab({ courseId, disabled }: { courseId: number; disabled: bo
         </div>
         <div className="flex flex-col gap-1">
           <Label htmlFor="lp-note" className="text-xs">Note (optional)</Label>
-          <Input id="lp-note" placeholder="e.g. midterm in week 7, skip chapter 9" value={note} onChange={(e) => setNote(e.target.value)} className="h-9" />
+          <div className="flex items-center gap-2">
+            <Input id="lp-note" placeholder="e.g. midterm in week 7, skip chapter 9" value={note} onChange={(e) => setNote(e.target.value)} className="h-9" />
+            <VoiceInput label="the planning note" onTranscript={(t) => setNote((v) => appendTranscript(v, t))} />
+          </div>
         </div>
         <Button size="sm" onClick={() => generate.mutate()} disabled={disabled || generate.isPending}>
           {generate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Draft plan

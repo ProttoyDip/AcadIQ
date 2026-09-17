@@ -9,3 +9,4 @@ export * from "./dualEvaluation.prompt";
 export * from "./paperGeneration.prompt";
 export * from "./facultyWorkflows.prompt";
 export * from "./timetable.prompt";
+export * from "./assistant.prompt";
