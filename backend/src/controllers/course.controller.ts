@@ -33,4 +33,13 @@ export const courseController = {
       next(err);
     }
   },
+
+  async remove(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const result = await courseService.remove(parsePositiveId(req.params.id), req.user!.userId);
+      return success(res, result);
+    } catch (err) {
+      next(err);
+    }
+  },
 };

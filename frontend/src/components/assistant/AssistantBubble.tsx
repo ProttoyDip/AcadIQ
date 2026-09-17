@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { VoiceInput, appendTranscript } from "../ui/voice-input";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useMotionValue } from "framer-motion";
 import { Check, Copy, Loader2, LocateFixed, Paperclip, Send, Sparkles, Trash2, X, XCircle } from "lucide-react";
 import { assistantService, AssistantPageContext } from "../../services/assistantService";
-import { scheduleService } from "../../services/scheduleService";
 import { apiErrorMessage } from "../../services/api";
 import { useAssistantStore, AssistantMessage } from "../../store/assistantStore";
 import { useAuth } from "../../hooks/useAuth";
@@ -185,10 +184,9 @@ export default function AssistantBubble() {
   const isAdmin = user?.role === "ADMIN";
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Classes awaiting confirmation are surfaced by the Topbar's NotificationCenter,
+  // which can act on them; a count here could only point at the problem.
   const today = todayIso();
-  const briefing = useQuery({ queryKey: ["schedule", "today", today], queryFn: () => scheduleService.today(today), enabled: user?.role === "FACULTY", staleTime: 60_000 });
-  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-  const unlogged = useMemo(() => (briefing.data?.sessions ?? []).filter((s) => s.status === "SCHEDULED" && Number(s.endTime.slice(0, 2)) * 60 + Number(s.endTime.slice(3, 5)) <= nowMin).length, [briefing.data, nowMin]);
 
   useEffect(() => {
     if (open) {
@@ -384,12 +382,6 @@ export default function AssistantBubble() {
         title={open ? "Close AcadIQ Copilot" : "AcadIQ Copilot — drag to move"}
       >
         {open ? <X className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
-        {!open && unlogged > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-warning px-1 text-[10px] font-bold text-white ring-2 ring-card" title={`${unlogged} class${unlogged === 1 ? "" : "es"} to log`}>
-            {unlogged}
-          </span>
-        )}
-        {!open && unlogged > 0 && <span className="absolute inset-0 -z-10 animate-ping rounded-full bg-primary/40" aria-hidden="true" />}
       </motion.button>
     </>
   );

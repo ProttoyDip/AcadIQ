@@ -18,4 +18,13 @@ export const courseService = {
   create(facultyId: number, input: CreateCourseInput) {
     return courseRepository.create({ facultyId, ...input });
   },
+
+  /** Ownership is checked first so another faculty's course reads as missing, not forbidden. */
+  async remove(id: number, facultyId: number) {
+    const course = await courseRepository.findById(id);
+    if (!course || course.facultyId !== facultyId) {
+      throw new AppError("Course not found", 404);
+    }
+    return courseRepository.remove(id);
+  },
 };

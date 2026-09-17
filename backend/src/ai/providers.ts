@@ -13,6 +13,12 @@ export interface AiProvider {
   jsonMode: boolean;
   models: string[];
   defaultModel: string;
+  /**
+   * Image-capable models, kept separate from `models` because the two are not
+   * interchangeable: a vision-only model pinned for chat fails, and a text-only
+   * model handed an image_url part is rejected by the provider.
+   */
+  visionModels: string[];
 }
 
 export interface AiModel {
@@ -42,6 +48,7 @@ const providerDefinition = z.object({
   jsonMode: z.boolean().default(true),
   models: z.array(modelName).min(1).max(64),
   defaultModel: modelName.optional(),
+  visionModels: z.array(modelName).max(64).default([]),
 }).strict().refine((provider) => !provider.defaultModel || provider.models.includes(provider.defaultModel));
 
 function extraProviders(): AiProvider[] {
@@ -71,6 +78,7 @@ function extraProviders(): AiProvider[] {
       jsonMode: definition.jsonMode,
       models: [...new Set(definition.models)],
       defaultModel: definition.defaultModel ?? definition.models[0],
+      visionModels: [...new Set(definition.visionModels)],
     }];
   });
 }
@@ -91,24 +99,33 @@ export function getAiProviders(): AiProvider[] {
       jsonMode: true,
       models: [...new Set([env.openAiModel, env.dualEvalSecondaryModel].filter(Boolean))],
       defaultModel: env.openAiModel,
+      // VISION_MODEL stays the legacy provider's image model; empty disables image import there.
+      visionModels: env.visionModel ? [env.visionModel] : [],
     });
   }
   return [...providers, ...extraProviders()];
 }
 
+function toPublicModel(provider: AiProvider, model: string): AiModel {
+  return { id: `${provider.id}:${model}`, provider: provider.id, providerLabel: provider.label, model, label: `${provider.label} / ${model}` };
+}
+
 /** Safe, allowlisted public metadata: no credentials or endpoints. */
-export function getModelCatalog(): { defaultModelId: string | null; models: AiModel[] } {
+export function getModelCatalog(): { defaultModelId: string | null; models: AiModel[]; visionModels: AiModel[] } {
   const providers = getAiProviders();
   return {
     defaultModelId: providers.length ? `${providers[0].id}:${providers[0].defaultModel}` : null,
-    models: providers.flatMap((provider) => provider.models.map((model) => ({
-      id: `${provider.id}:${model}`,
-      provider: provider.id,
-      providerLabel: provider.label,
-      model,
-      label: `${provider.label} / ${model}`,
-    }))),
+    // Text/JSON models only. Listing a vision-only model here would let a user pin
+    // it for chat, where it has no image to look at.
+    models: providers.flatMap((provider) => provider.models.map((model) => toPublicModel(provider, model))),
+    visionModels: providers.flatMap((provider) => provider.visionModels.map((model) => toPublicModel(provider, model))),
   };
+}
+
+/** Image-capable candidates in provider order; callers walk them for failover. */
+export function getVisionCandidates(): ResolvedAiModel[] {
+  return getAiProviders().flatMap((provider) =>
+    provider.visionModels.map((model) => ({ provider, model, id: `${provider.id}:${model}` })));
 }
 
 /** Accept public IDs or existing internal raw model names, always from the allowlist. */

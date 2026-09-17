@@ -110,6 +110,19 @@
     text-rendering: optimizeLegibility;
   }
 
+  /*
+   * The app shell owns scrolling: the sidebar and top bar stay put and only the
+   * <main> region scrolls. Pin the document to the viewport so nothing can scroll
+   * the page itself — otherwise a single overflowing child drags the whole shell
+   * up, taking the sidebar with it and leaving dead space beneath it.
+   */
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
   /* Headings never inherit tabular figures — only data does */
   h1, h2, h3, h4 {
     font-variant-numeric: normal;

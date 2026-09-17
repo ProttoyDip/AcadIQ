@@ -102,6 +102,20 @@ export const env = {
     textModel: process.env.OLLAMA_TEXT_MODEL ?? "gemma3:4b",
     visionModel: process.env.OLLAMA_VISION_MODEL ?? "qwen2.5vl:3b",
     embeddingModel: process.env.OLLAMA_EMBEDDING_MODEL ?? "nomic-embed-text",
+    /**
+     * Layers to offload to the GPU. `null` (unset) lets Ollama decide; `0` forces
+     * CPU inference. 0 is the only correct setting where Ollama's Vulkan/ROCm path
+     * loads the model but returns corrupt logits — the model emits random glyphs,
+     * then repeats one unused token until llama-server aborts. Correct output on
+     * CPU costs speed, not accuracy.
+     */
+    numGpu: (() => {
+      const raw = process.env.OLLAMA_NUM_GPU;
+      if (raw === undefined || raw.trim() === "") return null;
+      const value = Number(raw);
+      if (!Number.isInteger(value) || value < 0) throw new Error("OLLAMA_NUM_GPU must be a non-negative integer");
+      return value;
+    })(),
     timeoutMs: positiveInteger("OLLAMA_TIMEOUT_MS", 120_000),
   },
 };

@@ -16,7 +16,7 @@ process.env.AI_PROVIDERS_JSON = JSON.stringify([
   { id: "disabled", label: "Disabled", baseUrl: "https://disabled.invalid/v1/chat/completions", apiKeyEnv: "TEST_DISABLED_API_KEY", models: ["disabled-main"] },
 ]);
 
-const { getAiProviders, getModelCatalog, resolveAiModel } = require("../dist/ai/providers");
+const { getAiProviders, getModelCatalog, resolveAiModel, getVisionCandidates } = require("../dist/ai/providers");
 const { runWithAiSelection, currentAiSelection } = require("../dist/ai/modelContext");
 const { callLlmChat, callLlmChatJson, callLlmJsonWithMeta, resetAiProviderCooldowns } = require("../dist/ai/llmClient");
 const messages = [{ role: "user", content: "Describe the next teaching step." }];
@@ -68,6 +68,28 @@ function configureProviders(t, definitions) {
   t.after(() => { process.env.AI_PROVIDERS_JSON = original; });
 }
 
+test("image-capable models are catalogued and ordered separately from chat models", (t) => {
+  configureProviders(t, [
+    { id: "seeing", label: "Seeing", baseUrl: "https://seeing.invalid/v1/chat/completions", apiKeyEnv: "TEST_ALPHA_API_KEY", models: ["seeing-text"], visionModels: ["seeing-eyes"] },
+    { id: "blind", label: "Blind", baseUrl: "https://blind.invalid/v1/chat/completions", apiKeyEnv: "TEST_BETA_API_KEY", models: ["blind-text"] },
+  ]);
+  const catalog = getModelCatalog();
+  // The two lists are not interchangeable: a vision-only model offered for chat has
+  // no image to read, and a text-only model handed an image is rejected upstream.
+  assert.deepEqual(catalog.models.map((model) => model.id), ["seeing:seeing-text", "blind:blind-text"]);
+  assert.deepEqual(catalog.visionModels.map((model) => model.id), ["seeing:seeing-eyes"]);
+  assert.deepEqual(getVisionCandidates().map((candidate) => candidate.id), ["seeing:seeing-eyes"]);
+  assert.doesNotMatch(JSON.stringify(catalog), /test-secret|apiKey|apiKeyEnv|baseUrl|\.invalid/);
+});
+
+test("a provider without visionModels contributes no image candidates", (t) => {
+  configureProviders(t, [
+    { id: "textonly", label: "Text Only", baseUrl: "https://textonly.invalid/v1/chat/completions", apiKeyEnv: "TEST_ALPHA_API_KEY", models: ["text-main"] },
+  ]);
+  assert.deepEqual(getModelCatalog().visionModels, []);
+  assert.deepEqual(getVisionCandidates(), []);
+});
+
 test("qualified IDs resolve ambiguous raw names to the requested provider", (t) => {
   const definitions = JSON.parse(process.env.AI_PROVIDERS_JSON);
   definitions[1].models = ["alpha-main"];
@@ -78,7 +100,7 @@ test("qualified IDs resolve ambiguous raw names to the requested provider", (t) 
 
 test("a registry without configured keys has an empty catalogue and refuses calls", (t) => {
   configureProviders(t, []);
-  assert.deepEqual(getModelCatalog(), { defaultModelId: null, models: [] });
+  assert.deepEqual(getModelCatalog(), { defaultModelId: null, models: [], visionModels: [] });
   assert.throws(() => resolveAiModel(), (error) => error.status === 503);
 });
 

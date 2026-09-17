@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   UploadCloud,
   ListOrdered,
@@ -13,6 +13,8 @@ import {
   Download,
   HelpCircle,
   BookOpen,
+  History,
+  Trash2,
 } from "lucide-react";
 import PageHeader from "../../components/layout/PageHeader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
@@ -21,7 +23,7 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Badge } from "../../components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
-import { aiService, GeneratedQuestionItem } from "../../services/aiService";
+import { aiService, GeneratedQuestionItem, SavedGeneratedQuestion } from "../../services/aiService";
 import { apiErrorMessage } from "../../services/api";
 
 const QUESTION_TYPES = [
@@ -38,6 +40,7 @@ const QUESTION_TYPES = [
 const DIFFICULTIES = ["Easy", "Medium", "Hard", "Mixed"];
 
 export default function QuestionGenerator() {
+  const queryClient = useQueryClient();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [courseTextInput, setCourseTextInput] = useState("");
   const [useTextInput, setUseTextInput] = useState(false);
@@ -49,10 +52,25 @@ export default function QuestionGenerator() {
   const [includeAnswers, setIncludeAnswers] = useState(true);
   const [includeExplanations, setIncludeExplanations] = useState(true);
 
+  const [viewMode, setViewMode] = useState<"current" | "saved">("current");
   const [questions, setQuestions] = useState<GeneratedQuestionItem[]>([]);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [revealedAnswers, setRevealedAnswers] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch saved questions from database
+  const { data: savedQuestions, refetch: refetchSaved } = useQuery({
+    queryKey: ["ai-saved-questions"],
+    queryFn: () => aiService.listQuestionHistory({ limit: 100 }),
+  });
+
+  const deleteSavedMutation = useMutation({
+    mutationFn: (id: number) => aiService.deleteQuestion(id),
+    onSuccess: () => {
+      refetchSaved();
+      queryClient.invalidateQueries({ queryKey: ["ai-history-overview"] });
+    },
+  });
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -90,10 +108,14 @@ export default function QuestionGenerator() {
     },
     onSuccess: (data) => {
       setQuestions(data.questions || []);
+      setViewMode("current");
+      refetchSaved();
+      queryClient.invalidateQueries({ queryKey: ["ai-saved-questions"] });
+      queryClient.invalidateQueries({ queryKey: ["ai-history-overview"] });
       setError(null);
       // Reveal all answers initially if requested
       const initialReveal: Record<number, boolean> = {};
-      data.questions.forEach((_, idx) => {
+      (data.questions || []).forEach((_, idx) => {
         initialReveal[idx] = true;
       });
       setRevealedAnswers(initialReveal);
@@ -103,16 +125,16 @@ export default function QuestionGenerator() {
     },
   });
 
-  const toggleRevealAnswer = (idx: number) => {
-    setRevealedAnswers((prev) => ({
+  const toggleRevealAnswer = (idx: number | string) => {
+    setRevealedAnswers((prev: any) => ({
       ...prev,
       [idx]: !prev[idx],
     }));
   };
 
-  const handleCopyQuestion = (q: GeneratedQuestionItem, idx: number) => {
+  const handleCopyQuestion = (q: GeneratedQuestionItem | SavedGeneratedQuestion, idx: number) => {
     let text = `Q: ${q.question}\nType: ${q.type} | Difficulty: ${q.difficulty}\n`;
-    if (q.options && q.options.length > 0) {
+    if (q.options && Array.isArray(q.options) && q.options.length > 0) {
       text += q.options.map((opt, i) => `  ${String.fromCharCode(65 + i)}. ${opt}`).join("\n") + "\n";
     }
     if (q.correctAnswer) {
@@ -128,10 +150,11 @@ export default function QuestionGenerator() {
   };
 
   const handleExportJson = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ questions }, null, 2));
+    const listToExport = viewMode === "saved" ? (savedQuestions || []) : questions;
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ questions: listToExport }, null, 2));
     const downloadAnchor = document.createElement("a");
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `generated_questions_${Date.now()}.json`);
+    downloadAnchor.setAttribute("download", `questions_${viewMode}_${Date.now()}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -332,120 +355,146 @@ export default function QuestionGenerator() {
         <Card className="lg:col-span-7 flex flex-col">
           <CardHeader className="pb-3 border-b border-border/60">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <ListOrdered className="h-4 w-4 text-primary" /> Generated Questions ({questions.length})
-              </CardTitle>
-              {questions.length > 0 && (
-                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleExportJson}>
+              <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-lg">
+                <Button
+                  size="sm"
+                  variant={viewMode === "current" ? "secondary" : "ghost"}
+                  className="h-7 text-xs gap-1.5"
+                  onClick={() => setViewMode("current")}
+                >
+                  <ListOrdered className="h-3.5 w-3.5" /> Current ({questions.length})
+                </Button>
+                <Button
+                  size="sm"
+                  variant={viewMode === "saved" ? "secondary" : "ghost"}
+                  className="h-7 text-xs gap-1.5"
+                  onClick={() => setViewMode("saved")}
+                >
+                  <History className="h-3.5 w-3.5" /> Saved History ({savedQuestions?.length || 0})
+                </Button>
+              </div>
+
+              {((viewMode === "current" && questions.length > 0) || (viewMode === "saved" && (savedQuestions?.length || 0) > 0)) && (
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleExportJson}>
                   <Download className="mr-1.5 h-3.5 w-3.5" /> Export JSON
                 </Button>
               )}
             </div>
-            <CardDescription className="text-xs">
-              Every question is formulated strictly using the uploaded course content.
+            <CardDescription className="text-xs mt-1">
+              {viewMode === "current"
+                ? "Questions formulated from your current generation session."
+                : "All assessment questions previously generated and saved to your database."}
             </CardDescription>
           </CardHeader>
 
           <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[750px] scrollbar-thin">
-            {generateMutation.isPending ? (
-              <div className="py-24 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-3">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="font-semibold text-foreground text-sm">Gemma 3 is synthesizing questions...</p>
-                <p className="text-xs text-muted-foreground max-w-sm">
-                  Reviewing syllabus concepts, mapping Bloom's taxonomy, and validating JSON structure.
-                </p>
-              </div>
-            ) : questions.length === 0 ? (
-              <div className="py-24 text-center text-xs text-muted-foreground">
-                <HelpCircle className="mx-auto h-8 w-8 opacity-40 mb-2" />
-                <p>Configure options on the left and click "Generate Questions".</p>
-              </div>
-            ) : (
-              questions.map((q, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-xl border border-border/70 bg-card p-4 shadow-sm space-y-3 transition-colors hover:border-primary/40"
-                >
-                  {/* Header: Type, Difficulty, Copy */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">
-                        {idx + 1}
-                      </span>
-                      <Badge variant="outline" className="text-[10px]">
-                        {q.type}
-                      </Badge>
-                      <Badge
-                        className={`text-[10px] ${
-                          q.difficulty === "Easy"
-                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-                            : q.difficulty === "Hard"
-                            ? "bg-rose-500/15 text-rose-700 dark:text-rose-400"
-                            : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
-                        }`}
-                      >
-                        {q.difficulty}
-                      </Badge>
-                      {q.topic && (
-                        <span className="text-[11px] text-muted-foreground truncate max-w-[200px]">
-                          Topic: {q.topic}
-                        </span>
-                      )}
-                    </div>
-
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                      onClick={() => handleCopyQuestion(q, idx)}
-                    >
-                      {copiedId === idx ? (
-                        <>
-                          <Check className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3.5 w-3.5 mr-1" /> Copy
-                        </>
-                      )}
-                    </Button>
-                  </div>
-
-                  {/* Question Text */}
-                  <p className="font-semibold text-xs leading-relaxed text-foreground">
-                    {q.question}
+            {viewMode === "current" ? (
+              generateMutation.isPending ? (
+                <div className="py-24 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="font-semibold text-foreground text-sm">Gemma 3 is synthesizing questions...</p>
+                  <p className="text-xs text-muted-foreground max-w-sm">
+                    Reviewing syllabus concepts, mapping Bloom's taxonomy, and validating JSON structure.
                   </p>
-
-                  {/* MCQ Options */}
-                  {q.options && q.options.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                      {q.options.map((opt, optIdx) => {
-                        const isCorrect = q.correctAnswer && q.correctAnswer.trim().toLowerCase() === opt.trim().toLowerCase();
-                        const optionLetter = String.fromCharCode(65 + optIdx);
-                        return (
-                          <div
-                            key={optIdx}
-                            className={`rounded-lg p-2.5 text-xs border flex items-center gap-2 ${
-                              isCorrect && revealedAnswers[idx]
-                                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-900 dark:text-emerald-300 font-medium"
-                                : "border-border/60 bg-muted/20 text-foreground"
-                            }`}
-                          >
-                            <span className="font-bold text-[10px] text-muted-foreground">{optionLetter}.</span>
-                            <span>{opt}</span>
-                            {isCorrect && revealedAnswers[idx] && (
-                              <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                </div>
+              ) : questions.length === 0 ? (
+                <div className="py-20 text-center text-xs text-muted-foreground space-y-3">
+                  <HelpCircle className="mx-auto h-8 w-8 opacity-40" />
+                  <p className="font-medium text-foreground text-sm">No active generation session</p>
+                  <p className="max-w-xs mx-auto text-muted-foreground">
+                    Configure options on the left and click "Generate Questions" to create new assessment items.
+                  </p>
+                  {savedQuestions && savedQuestions.length > 0 && (
+                    <Button size="sm" variant="outline" className="mt-2 text-xs" onClick={() => setViewMode("saved")}>
+                      <History className="mr-1.5 h-3.5 w-3.5 text-primary" /> View {savedQuestions.length} Saved Questions
+                    </Button>
                   )}
+                </div>
+              ) : (
+                questions.map((q, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-xl border border-border/70 bg-card p-4 shadow-xs space-y-3 transition-colors hover:border-primary/40"
+                  >
+                    {/* Header: Type, Difficulty, Copy */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">
+                          {idx + 1}
+                        </span>
+                        <Badge variant="outline" className="text-[10px]">
+                          {q.type}
+                        </Badge>
+                        <Badge
+                          className={`text-[10px] ${
+                            q.difficulty === "Easy"
+                              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                              : q.difficulty === "Hard"
+                              ? "bg-rose-500/15 text-rose-700 dark:text-rose-400"
+                              : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                          }`}
+                        >
+                          {q.difficulty}
+                        </Badge>
+                        {q.topic && (
+                          <span className="text-[11px] text-muted-foreground truncate max-w-[200px]">
+                            Topic: {q.topic}
+                          </span>
+                        )}
+                      </div>
 
-                  {/* Toggle Answer / Explanation Drawer */}
-                  {(q.correctAnswer || q.explanation) && (
-                    <div className="pt-2 border-t border-border/50">
-                      <div className="flex items-center justify-between">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => handleCopyQuestion(q, idx)}
+                      >
+                        {copiedId === idx ? (
+                          <>
+                            <Check className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5 mr-1" /> Copy
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    {/* Question Text */}
+                    <p className="font-semibold text-xs leading-relaxed text-foreground whitespace-pre-wrap">
+                      {q.question}
+                    </p>
+
+                    {/* MCQ Options */}
+                    {q.options && q.options.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        {q.options.map((opt, optIdx) => {
+                          const isCorrect = q.correctAnswer && q.correctAnswer.trim().toLowerCase() === opt.trim().toLowerCase();
+                          const optionLetter = String.fromCharCode(65 + optIdx);
+                          return (
+                            <div
+                              key={optIdx}
+                              className={`rounded-lg p-2.5 text-xs border flex items-center gap-2 ${
+                                isCorrect && revealedAnswers[idx]
+                                  ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-900 dark:text-emerald-300 font-medium"
+                                  : "border-border/60 bg-muted/20 text-foreground"
+                              }`}
+                            >
+                              <span className="font-bold text-[10px] text-muted-foreground">{optionLetter}.</span>
+                              <span>{opt}</span>
+                              {isCorrect && revealedAnswers[idx] && (
+                                <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Toggle Answer / Explanation */}
+                    {(q.correctAnswer || q.explanation) && (
+                      <div className="pt-2 border-t border-border/50">
                         <Button
                           size="sm"
                           variant="ghost"
@@ -454,30 +503,158 @@ export default function QuestionGenerator() {
                         >
                           {revealedAnswers[idx] ? "Hide Answer & Explanation" : "Reveal Answer & Explanation"}
                         </Button>
+
+                        {revealedAnswers[idx] && (
+                          <div className="mt-2 space-y-2 rounded-lg bg-muted/30 p-3 border border-border/40 text-xs">
+                            {q.correctAnswer && (
+                              <div>
+                                <span className="font-semibold text-foreground">Answer: </span>
+                                <span className="text-emerald-700 dark:text-emerald-400 font-medium">
+                                  {q.correctAnswer}
+                                </span>
+                              </div>
+                            )}
+                            {q.explanation && (
+                              <div className="text-muted-foreground leading-relaxed">
+                                <span className="font-semibold text-foreground">Explanation: </span>
+                                {q.explanation}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )
+            ) : (
+              /* VIEW MODE: SAVED HISTORY */
+              !savedQuestions || savedQuestions.length === 0 ? (
+                <div className="py-20 text-center text-xs text-muted-foreground space-y-2">
+                  <History className="mx-auto h-8 w-8 opacity-40" />
+                  <p className="font-medium text-foreground text-sm">No saved questions in database</p>
+                  <p className="max-w-xs mx-auto text-muted-foreground">
+                    Generate questions from your syllabus to automatically save them here for future exam creation.
+                  </p>
+                </div>
+              ) : (
+                savedQuestions.map((q, idx) => (
+                  <div
+                    key={q.id}
+                    className="rounded-xl border border-border/70 bg-card p-4 shadow-xs space-y-3 transition-colors hover:border-primary/40"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">
+                          #{idx + 1}
+                        </span>
+                        <Badge variant="outline" className="text-[10px]">
+                          {q.type}
+                        </Badge>
+                        <Badge
+                          className={`text-[10px] ${
+                            q.difficulty === "Easy"
+                              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                              : q.difficulty === "Hard"
+                              ? "bg-rose-500/15 text-rose-700 dark:text-rose-400"
+                              : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                          }`}
+                        >
+                          {q.difficulty}
+                        </Badge>
+                        {q.topic && (
+                          <span className="text-[11px] text-muted-foreground truncate max-w-[180px]">
+                            Topic: {q.topic}
+                          </span>
+                        )}
                       </div>
 
-                      {revealedAnswers[idx] && (
-                        <div className="mt-2 space-y-2 rounded-lg bg-muted/30 p-3 border border-border/40 text-xs">
-                          {q.correctAnswer && (
-                            <div>
-                              <span className="font-semibold text-foreground">Answer: </span>
-                              <span className="text-emerald-700 dark:text-emerald-400 font-medium">
-                                {q.correctAnswer}
-                              </span>
-                            </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                          onClick={() => handleCopyQuestion(q, q.id)}
+                          title="Copy question text"
+                        >
+                          {copiedId === q.id ? (
+                            <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
                           )}
-                          {q.explanation && (
-                            <div className="text-muted-foreground leading-relaxed">
-                              <span className="font-semibold text-foreground">Explanation: </span>
-                              {q.explanation}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                          onClick={() => {
+                            if (window.confirm("Delete this saved question?")) {
+                              deleteSavedMutation.mutate(q.id);
+                            }
+                          }}
+                          title="Delete from saved history"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
-                  )}
-                </div>
-              ))
+
+                    <p className="font-semibold text-xs leading-relaxed text-foreground whitespace-pre-wrap">
+                      {q.question}
+                    </p>
+
+                    {q.options && Array.isArray(q.options) && q.options.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        {q.options.map((opt, optIdx) => (
+                          <div
+                            key={optIdx}
+                            className="rounded-lg p-2.5 text-xs border border-border/60 bg-muted/20 text-foreground flex items-center gap-2"
+                          >
+                            <span className="font-bold text-[10px] text-muted-foreground">{String.fromCharCode(65 + optIdx)}.</span>
+                            <span>{opt}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {(q.correctAnswer || q.explanation) && (
+                      <div className="pt-2 border-t border-border/50">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 p-0 text-[11px] font-semibold text-primary"
+                          onClick={() => toggleRevealAnswer(q.id)}
+                        >
+                          {revealedAnswers[q.id] ? "Hide Answer & Explanation" : "Reveal Answer & Explanation"}
+                        </Button>
+
+                        {revealedAnswers[q.id] && (
+                          <div className="mt-2 space-y-2 rounded-lg bg-muted/30 p-3 border border-border/40 text-xs">
+                            {q.correctAnswer && (
+                              <div>
+                                <span className="font-semibold text-foreground">Answer: </span>
+                                <span className="text-emerald-700 dark:text-emerald-400 font-medium">
+                                  {q.correctAnswer}
+                                </span>
+                              </div>
+                            )}
+                            {q.explanation && (
+                              <div className="text-muted-foreground leading-relaxed">
+                                <span className="font-semibold text-foreground">Explanation: </span>
+                                {q.explanation}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="text-[10px] text-muted-foreground/60 text-right pt-1">
+                      Saved {new Date(q.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                ))
+              )
             )}
           </CardContent>
         </Card>

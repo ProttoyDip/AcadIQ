@@ -24,7 +24,7 @@ flowchart LR
 1. **Upload** — `POST /api/documents/upload` (multipart, PDF only, 10MB cap, enforced in `middleware/upload.middleware.ts`).
 2. **Parse** — `utils/pdfParser.ts` extracts raw text; `services/upload.service.ts` segments question papers into individual questions using a numbering heuristic (`Q1`, `1.`, etc.) and best-effort marks extraction.
 3. **Prompt management** — each analysis type has its own prompt module under `ai/prompts/`, separating the *system* instruction (task definition + strict output contract) from the *user* content (syllabus/question text). This keeps prompts versionable and testable independent of the LLM call itself.
-4. **AI analysis engine** — `ai/llmClient.ts` calls an OpenAI-compatible chat completions endpoint with `response_format: json_object`, so the model is constrained to return JSON. The provider/model are configured via env vars (`OPENAI_BASE_URL`, `OPENAI_MODEL`), keeping the pipeline vendor-agnostic.
+4. **AI analysis engine** — `ai/llmClient.ts` calls an OpenAI-compatible chat completions endpoint with `response_format: json_object`, so the model is constrained to return JSON. The legacy provider is configured via env vars (`OPENAI_BASE_URL`, `OPENAI_MODEL`); `ai/providers.ts` adds any number of further providers from `AI_PROVIDERS_JSON`, keeping the pipeline vendor-agnostic. `routedCompletion` walks the resulting candidate list in order, so an exhausted account degrades to the next provider instead of failing the analysis. The caller chooses a model per request via `X-AI-Model` (`ai/modelContext.ts` carries the selection through the request in an `AsyncLocalStorage` scope), and the answering model is reported back in the response's `ai` block. See [`ai-providers.md`](ai-providers.md).
 5. **Response validation** — `ai/schemas/analysisResponse.schema.ts` (Zod) validates the LLM's JSON against the exact shape the frontend expects. A failed validation raises an `AppError(502)` instead of persisting malformed data — the analysis is retried or surfaced as an error to the faculty member, never silently stored.
 6. **Storage** — validated results are stored in `analysis_reports.result_json` (full structured result) and exploded into `recommendations` rows (message + priority) for querying/sorting.
 7. **Visualization** — the frontend renders `result_json` via Chart.js (`BloomChart`, `CoverageChart`) and the `RecommendationPanel`/`ReportViewer` components — no re-computation, just rendering what was validated and stored.
@@ -35,6 +35,9 @@ flowchart LR
 | --- | --- |
 | Missing `OPENAI_API_KEY` | `AppError(503)` — "AI provider is not configured" |
 | LLM HTTP error | Logged, `AppError(502)` — "AI analysis request failed" |
+| Rate limit (429), exhausted credit (402 / `insufficient_quota`), or rejected credential (401/403) | The provider is put on a short local cooldown and the next configured provider is tried. Only when every candidate fails does the request raise `AppError(502)` with `decision: "ANALYSIS_UNAVAILABLE"` |
+| Per-request token limit (413) | Not retried and not failed over — a payload one provider refuses will be refused again. Surfaced as a sized error naming the limit |
+| Provider unreachable / unreadable body | Treated as a failed attempt; retried, then failed over when fallback is enabled |
 | Non-JSON / malformed LLM output | `AppError(502)` — "AI provider returned malformed JSON" |
 | JSON that doesn't match the expected schema | `AppError(502)` with Zod's flattened error details — "AI response failed validation" |
 | Missing syllabus/question paper prerequisites | `AppError(400/404)` before any LLM call is made (fail fast, save the API call) |

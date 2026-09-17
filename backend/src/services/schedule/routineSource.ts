@@ -3,7 +3,7 @@ import path from "node:path";
 import { AppError } from "../../middleware/error.middleware";
 import { extractDocumentText } from "../../ai/documentTextExtractor";
 import { callLlmVision } from "../../ai/llmClient";
-import { env } from "../../config/env";
+import { getVisionCandidates } from "../../ai/providers";
 
 export const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const IMAGE_EXTENSIONS = new Map([[".jpg", "image/jpeg"], [".jpeg", "image/jpeg"], [".png", "image/png"], [".webp", "image/webp"]]);
@@ -21,7 +21,7 @@ export function isImageFile(file: { mimetype: string; originalname: string }): b
 /** Text of a routine regardless of format: documents are parsed, images are transcribed by the vision model. */
 export async function routineFileToText(file: { path: string; mimetype: string; originalname: string }): Promise<{ text: string; method: "DOCUMENT" | "VISION" }> {
   if (!isImageFile(file)) return { text: await extractDocumentText(file.path, file.mimetype), method: "DOCUMENT" };
-  if (!env.visionModel) throw new AppError("Image import is disabled on this server (VISION_MODEL is empty). Upload a PDF or DOCX instead.", 400);
+  if (!getVisionCandidates().length) throw new AppError("Image import is disabled on this server (no image-capable AI model is configured). Upload a PDF or DOCX instead.", 400);
   const stat = await fs.stat(file.path);
   if (stat.size > MAX_IMAGE_BYTES) throw new AppError("Routine photo must be under 4 MB — crop or compress it and try again", 413);
   const mimeType = IMAGE_MIME_TYPES.has(file.mimetype) ? file.mimetype : IMAGE_EXTENSIONS.get(path.extname(file.originalname).toLowerCase())!;

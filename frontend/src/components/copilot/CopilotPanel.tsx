@@ -9,7 +9,6 @@ import ChatMessage from "./ChatMessage";
 import QuickActionButton from "./QuickActionButton";
 import TypingIndicator from "./TypingIndicator";
 import { CopilotRetrieval } from "../../types";
-import AiModelSelector from "../ai/AiModelSelector";
 
 interface Turn {
   role: "USER" | "ASSISTANT";
@@ -139,10 +138,6 @@ export default function CopilotPanel({ courseId, examId, reportId, contextLabel 
         {contextLabel && (
           <span className="hidden shrink-0 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary sm:inline-flex">{contextLabel}</span>
         )}
-      </div>
-
-      <div className="shrink-0 border-b border-border px-4 py-3">
-        <AiModelSelector compact disabled={chat.isPending} />
       </div>
 
       <div className="border-b border-border">

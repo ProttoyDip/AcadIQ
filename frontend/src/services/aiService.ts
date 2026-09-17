@@ -99,6 +99,40 @@ export interface GenerateQuestionsPayload {
   includeExplanations?: boolean;
 }
 
+export interface SavedGeneratedQuestion {
+  id: number;
+  documentId?: number | null;
+  userId?: number | null;
+  topic?: string | null;
+  difficulty: string;
+  type: string;
+  question: string;
+  options?: string[] | null;
+  correctAnswer?: string | null;
+  explanation?: string | null;
+  createdAt: string;
+  document?: {
+    id: number;
+    title: string;
+    originalName: string;
+  } | null;
+}
+
+export interface AiHistoryOverview {
+  totalDocuments: number;
+  totalQuestions: number;
+  readySummariesCount: number;
+  documentsWithSummary: Array<{
+    id: number;
+    title: string;
+    originalName: string;
+    summary: string;
+    keyPoints: string[] | null;
+    createdAt: string;
+  }>;
+  recentQuestions: SavedGeneratedQuestion[];
+}
+
 export const aiService = {
   getStatus: () =>
     api.get<{ success: boolean; data: AiStatus }>("/ai/status").then((r) => r.data.data),
@@ -183,4 +217,13 @@ export const aiService = {
       .post<{ success: boolean; data: QuestionGenerationResult }>("/ai/course/generate-questions", payload)
       .then((r) => r.data.data);
   },
+
+  listQuestionHistory: (params?: { documentId?: number; type?: string; difficulty?: string; search?: string; limit?: number }) =>
+    api.get<{ success: boolean; data: SavedGeneratedQuestion[] }>("/ai/questions/history", { params }).then((r) => r.data.data),
+
+  deleteQuestion: (id: number) =>
+    api.delete<{ success: boolean; data: { deleted: boolean; questionId: number } }>(`/ai/questions/${id}`).then((r) => r.data.data),
+
+  getHistoryOverview: () =>
+    api.get<{ success: boolean; data: AiHistoryOverview }>("/ai/history").then((r) => r.data.data),
 };

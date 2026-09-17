@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
-import { Plus, Sparkles } from "lucide-react";
-import { useCourses, useCreateCourse } from "../hooks/useCourses";
+import { CheckCircle2, FileText, Plus, Sparkles } from "lucide-react";
+import { useCourse, useCourses, useCreateCourse } from "../hooks/useCourses";
 import { useUploadSyllabus, useUploadQuestionPaper } from "../hooks/useUpload";
 import { apiErrorMessage } from "../services/api";
 import PageHeader from "../components/layout/PageHeader";
@@ -47,7 +47,33 @@ export default function UploadAnalysis() {
   const [newCourseForm, setNewCourseForm] = useState({ courseCode: "", courseName: "", description: "" });
   const [newCourseError, setNewCourseError] = useState<string | null>(null);
 
+  const [replacingSyllabus, setReplacingSyllabus] = useState(false);
+
+  const { data: course } = useCourse(courseId ? Number(courseId) : null);
+  // Sorted explicitly: the course detail returns syllabi unordered, but every analysis
+  // reads the newest one (documentRepository.findLatestSyllabus), so show that same one.
+  const existingSyllabus =
+    [...(course?.syllabusDocuments ?? [])].sort(
+      (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    )[0] ?? null;
+  // A syllabus already stored on the course satisfies this step. The backend never needed
+  // a fresh copy, and re-uploading only inserts a duplicate row that shadows the old one.
+  const hasSyllabus = syllabusUploaded || (!!existingSyllabus && !replacingSyllabus);
+
   const canUpload = !!courseId;
+
+  function handleCourseChange(next: string) {
+    // Staging is per course; carrying it across a switch would claim documents
+    // that were uploaded against the previous course.
+    setCourseId(next);
+    setSyllabusFile(null);
+    setSyllabusUploaded(false);
+    setPaperFile(null);
+    setQuestionPaperId(null);
+    setDuplicateWarnings([]);
+    setReplacingSyllabus(false);
+    setError(null);
+  }
 
   async function handleCreateCourse(e: FormEvent) {
     e.preventDefault();
@@ -85,7 +111,7 @@ export default function UploadAnalysis() {
     }
   }
 
-  const readyToAnalyze = syllabusUploaded && !!questionPaperId;
+  const readyToAnalyze = hasSyllabus && !!questionPaperId;
 
   return (
     <div className="flex flex-col gap-6 max-w-5xl">
@@ -174,7 +200,7 @@ export default function UploadAnalysis() {
         <CardContent className="pt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-semibold">Course Catalog Item</Label>
-            <Select value={courseId} onValueChange={setCourseId}>
+            <Select value={courseId} onValueChange={handleCourseChange}>
               <SelectTrigger className="h-9 text-xs">
                 <SelectValue placeholder={courses?.length === 0 ? "No courses - Add one first" : "Select course..."} />
               </SelectTrigger>
@@ -229,9 +255,9 @@ export default function UploadAnalysis() {
             </div>
           </div>
           <span className="text-xs font-semibold text-muted-foreground">
-            {syllabusUploaded && questionPaperId ? (
+            {hasSyllabus && questionPaperId ? (
               <span className="text-success font-bold">2/2 Documents Staged</span>
-            ) : syllabusUploaded || questionPaperId ? (
+            ) : hasSyllabus || questionPaperId ? (
               <span className="text-warning font-bold">1/2 Documents Staged</span>
             ) : (
               "0/2 Staged"
@@ -250,8 +276,42 @@ export default function UploadAnalysis() {
                   setSyllabusUploaded(false);
                 }}
               />
+            ) : existingSyllabus && !replacingSyllabus ? (
+              <div className="flex items-center justify-between rounded-xl border border-border bg-card p-3.5 shadow-2xs">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary-100 bg-primary-50 text-primary-700 dark:border-primary-900 dark:bg-primary-950/60 dark:text-primary-300">
+                    <FileText className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold tracking-tight text-foreground sm:text-sm">{existingSyllabus.originalName}</p>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground">
+                        Already on this course · {new Date(existingSyllabus.uploadedAt).toLocaleDateString()}
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-success">
+                        <CheckCircle2 className="h-3 w-3" /> Indexed
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" className="h-7 shrink-0 text-xs" onClick={() => setReplacingSyllabus(true)}>
+                  Replace
+                </Button>
+              </div>
             ) : (
-              <Dropzone label="Official Course Syllabus" onFileAccepted={handleSyllabusFile} disabled={!canUpload} />
+              <>
+                <Dropzone label="Official Course Syllabus" onFileAccepted={handleSyllabusFile} disabled={!canUpload} />
+                {existingSyllabus && replacingSyllabus && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 self-start text-xs"
+                    onClick={() => setReplacingSyllabus(false)}
+                  >
+                    Keep existing syllabus
+                  </Button>
+                )}
+              </>
             )}
           </div>
           <div className="flex flex-col gap-2.5">
@@ -338,7 +398,11 @@ export default function UploadAnalysis() {
               onFinish={() => setProcessing(false)}
             />
           ) : (
-            <p className="text-xs font-medium text-muted-foreground">Upload both documents above to enable analysis.</p>
+            <p className="text-xs font-medium text-muted-foreground">
+              {hasSyllabus
+                ? "Upload the draft question paper above to enable analysis."
+                : "Upload both documents above to enable analysis."}
+            </p>
           )}
         </CardContent>
       </Card>

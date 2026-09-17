@@ -8,7 +8,10 @@ export interface AiModel {
 
 export interface AiModelCatalog {
   defaultModelId: string | null;
+  /** Chat/JSON models, the only ones the picker may offer. */
   models: AiModel[];
+  /** Image-capable models, kept separate: they are not usable for chat. */
+  visionModels: AiModel[];
 }
 
 export interface AiResponseMetadata {

@@ -24,6 +24,9 @@ const searchQuery = z.object({
 
 router.use(authenticate, requireRole("FACULTY"));
 router.get("/", courseController.list);
+// Declared before "/:id/..." helpers only for readability; Express matches on the
+// full path, so this never shadows the nested material/plan deletes below.
+router.delete("/:id", courseController.remove);
 router.get("/:id/questions/search", async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { q, k, floor } = searchQuery.parse(req.query);

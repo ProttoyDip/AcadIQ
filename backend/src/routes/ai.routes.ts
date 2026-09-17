@@ -29,5 +29,10 @@ router.post("/image/analyze", uploadAiImage.single("file"), aiController.analyze
 
 // Feature 3: Course Outline Question Generator
 router.post("/course/generate-questions", uploadAiCourseDoc.single("file"), aiController.generateCourseQuestions);
+router.get("/questions/history", aiController.getQuestionsHistory);
+router.delete("/questions/:id", aiController.deleteQuestion);
+
+// Saved Work & History Overview
+router.get("/history", aiController.getAiHistoryOverview);
 
 export default router;

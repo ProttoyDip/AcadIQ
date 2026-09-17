@@ -21,7 +21,7 @@ flowchart TB
         Files[("Uploaded PDFs<br/>volume")]
     end
 
-    LLM["LLM Provider<br/>(OpenAI-compatible API)"]
+    LLM["LLM Providers<br/>(OpenAI-compatible APIs)<br/>registry + ordered failover"]
 
     UI -- "REST / JWT" --> MW --> CTRL --> SVC
     SVC --> REPO --> MySQL
@@ -61,7 +61,7 @@ backend/src/
 ├── repositories/  Prisma queries only; nothing above this layer imports Prisma directly
 ├── models/        domain types not covered by Prisma's generated models (AI result shapes)
 ├── validators/    Zod schemas for request payloads
-├── ai/            LLM client, prompt templates, response-validation pipelines
+├── ai/            LLM client, provider registry + model routing, prompt templates, response-validation pipelines
 ├── database/      shared Prisma client instance
 ├── app.ts         Express app assembly (middleware + routes)
 └── server.ts      process entrypoint
@@ -71,8 +71,10 @@ backend/src/
 
 ```
 routes → controllers → services → repositories → database
-                     ↘ ai (pipelines) → llmClient → external LLM
+                     ↘ ai (pipelines) → llmClient → provider registry → external LLMs
 ```
+
+The provider registry (`ai/providers.ts`) is the single place that knows about credentials and endpoints; it exposes only an allowlisted catalogue of `provider-id:model-id` pairs to the API. `llmClient` tries those candidates in order, so losing one account degrades the service instead of stopping it. See [`ai-providers.md`](ai-providers.md).
 
 Controllers never call Prisma directly, and repositories never contain business rules — this keeps the AI/DB layers swappable (e.g., replacing the LLM provider or moving off MySQL) without touching controllers.
 

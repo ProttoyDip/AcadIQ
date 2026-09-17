@@ -1,9 +1,9 @@
 import { env } from "../config/env";
 import { AppError } from "../middleware/error.middleware";
 import { logger } from "../utils/logger";
-import { getAiProviders } from "./providers";
+import { getAiProviders, getVisionCandidates, ResolvedAiModel } from "./providers";
 import { publicAiModel, resolveChatSelection } from "./modelRouting";
-import { recordAiModel } from "./modelContext";
+import { currentAiSelection, recordAiModel } from "./modelContext";
 
 /**
  * Thin wrapper around the LLM provider. Kept provider-agnostic (OpenAI-compatible
@@ -101,18 +101,83 @@ export async function callLlmChat(messages: ChatMessage[], options: LlmCallOptio
  * Used to transcribe photographed timetables before the normal text pipeline runs.
  */
 export async function callLlmVision(image: { mimeType: string; base64: string }, instruction: string, options: { maxTokens?: number } = {}): Promise<string> {
-  if (!env.openAiApiKey) throw new AppError("AI provider is not configured (GROQ_API_KEY or OPENAI_API_KEY missing)", 503);
-  if (!env.visionModel) throw new AppError("Image import is disabled on this server (VISION_MODEL is empty)", 400);
-  const messages = [
-    {
-      role: "user" as const,
-      content: [
-        { type: "text", text: instruction },
-        { type: "image_url", image_url: { url: `data:${image.mimeType};base64,${image.base64}` } },
-      ],
-    },
-  ];
-  return chatCompletion(env.visionModel, messages as unknown as ChatMessage[], "llm_vision", { temperature: 0.1, maxTokens: options.maxTokens ?? 4096 });
+  const candidates = visionCandidatesForRequest();
+  if (!candidates.length) {
+    throw new AppError("Image reading is not configured on this server (no image-capable AI model is available)", 503);
+  }
+  const messages = [{
+    role: "user",
+    content: [
+      { type: "text", text: instruction },
+      { type: "image_url", image_url: { url: `data:${image.mimeType};base64,${image.base64}` } },
+    ],
+  }];
+  const deadline = Date.now() + env.aiTimeoutMs;
+  let lastFailure = "No configured AI model could read this image";
+
+  for (const candidate of candidates) {
+    const { provider, model } = candidate;
+    const cooldownKey = `${provider.id}:${provider.baseUrl}`;
+    if (candidates.length > 1 && (providerCooldowns.get(cooldownKey) ?? 0) > Date.now()) continue;
+    if (Date.now() >= deadline) break;
+
+    let response: Response;
+    try {
+      response = await fetch(provider.baseUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${provider.apiKey}` },
+        body: JSON.stringify({ model, messages, temperature: 0.1, max_tokens: options.maxTokens ?? 4096 }),
+        signal: AbortSignal.timeout(Math.max(1000, Math.min(deadline - Date.now(), Math.floor(env.aiTimeoutMs / candidates.length)))),
+      });
+    } catch {
+      lastFailure = "AI provider is unavailable";
+      providerCooldowns.set(cooldownKey, Date.now() + 5_000);
+      continue;
+    }
+
+    if (!response.ok) {
+      const failure = await classifyFailure(response);
+      lastFailure = failure.message;
+      logger.warn("llm_vision_attempt_failed", { provider: provider.id, model, statusCode: response.status });
+      // An oversized image is refused by every provider, so retrying elsewhere only
+      // re-uploads it. Every other failure is worth trying on the next account.
+      if (response.status === 413) throw new AppError(failure.message, 413);
+      providerCooldowns.set(cooldownKey, Date.now() + (response.status === 429 ? 30_000 : 10_000));
+      continue;
+    }
+
+    try {
+      const body = (await response.json()) as ChatCompletionBody;
+      const content = body?.choices?.[0]?.message?.content;
+      if (typeof content === "string" && content.trim()) {
+        const actualModel = typeof body.model === "string" && body.model.trim() ? body.model.trim() : model;
+        const actual = { ...candidate, model: actualModel, id: `${provider.id}:${actualModel}` };
+        providerCooldowns.delete(cooldownKey);
+        recordAiModel(publicAiModel(actual), candidate.id !== candidates[0].id);
+        return content.trim();
+      }
+      lastFailure = "AI provider returned an empty response";
+    } catch {
+      lastFailure = "AI provider returned an unreadable response";
+    }
+  }
+
+  logger.error("llm_vision_failed", { reason: lastFailure });
+  throw new AppError(lastFailure, 502);
+}
+
+/**
+ * The pinned model when it can actually see images, otherwise every image-capable
+ * model in provider order. A model chosen for chat is ignored here unless it is
+ * also in a provider's visionModels list — handing an image to a text-only model
+ * just produces a provider rejection.
+ */
+function visionCandidatesForRequest(): ResolvedAiModel[] {
+  const all = getVisionCandidates();
+  const scope = currentAiSelection();
+  const pinned = scope && scope.modelId !== "auto" ? all.find((candidate) => candidate.id === scope.modelId) : undefined;
+  if (!pinned) return all;
+  return scope!.allowFallback ? [pinned, ...all.filter((candidate) => candidate.id !== pinned.id)] : [pinned];
 }
 
 /**
@@ -121,7 +186,7 @@ export async function callLlmVision(image: { mimeType: string; base64: string },
  * here dictate in Bengali and Bangla-accented English, which the browser engines
  * transcribe badly, and Web Speech is Chrome-only.
  *
- * Retries transport failures and rate limits the same way chatCompletion does,
+ * Retries transport failures and rate limits the same way the chat router does,
  * but never retries a rejected file — a clip the provider refuses once will be
  * refused again, and each attempt re-uploads the whole payload.
  */
@@ -181,64 +246,6 @@ export async function callLlmTranscription(
   }
 
   logger.error("llm_transcription_failed", { reason: lastFailure });
-  throw new AppError(lastFailure, 502);
-}
-
-async function chatCompletion(model: string, messages: ChatMessage[], logPrefix: string, options: { temperature?: number; maxTokens?: number } = {}): Promise<string> {
-
-  let lastFailure = "AI copilot request failed";
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    let response: Response;
-    try {
-      response = await fetch(env.openAiBaseUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${env.openAiApiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature: options.temperature ?? 0.3,
-          max_tokens: options.maxTokens ?? 2048,
-        }),
-        signal: AbortSignal.timeout(env.aiTimeoutMs),
-      });
-    } catch (error) {
-      lastFailure = "AI provider is unavailable";
-      if (attempt === 2) {
-        logger.error(`${logPrefix}_transport_failed`, { error: error instanceof Error ? error.message : String(error) });
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt)));
-      continue;
-    }
-
-    if (!response.ok) {
-      const failure = await classifyFailure(response);
-      lastFailure = failure.message;
-      logger.warn(`${logPrefix}_request_attempt_failed`, { attempt: attempt + 1, statusCode: response.status, retryable: failure.retryable, model });
-      if (!failure.retryable) break;
-      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, response, failure.retryAfterMs)));
-      continue;
-    } else {
-      try {
-        const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
-        const content = body?.choices?.[0]?.message?.content;
-        if (!content) {
-          lastFailure = "AI provider returned an empty response";
-        } else {
-          return content.trim();
-        }
-      } catch {
-        lastFailure = "AI provider returned an unreadable response";
-      }
-    }
-
-    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, response)));
-  }
-
-  logger.error(`${logPrefix}_failed`, { reason: lastFailure, model });
   throw new AppError(lastFailure, 502);
 }
 

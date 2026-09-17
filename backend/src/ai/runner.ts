@@ -7,6 +7,7 @@ import { PromptDescriptor } from "./prompts/registry";
 import { llmRateGate } from "./rateGate";
 import { currentTraceScope, LlmRunTrace, recordRun } from "./trace";
 import { callValidatedLlmJsonWithTrace, inputHashOf } from "./validatedLlm";
+import { resolveChatSelection } from "./modelRouting";
 
 export type ReliabilityMode = "fast" | "verified" | "cross-model";
 
@@ -49,9 +50,14 @@ export async function runLlmAnalysis<A extends unknown[], T>(
   options: RunOptions<T> = {}
 ): Promise<RunResult<T>> {
   const crossModel = options.reliability === "cross-model";
-  const models = crossModel
-    ? [...new Set([options.model ?? env.openAiModel, env.dualEvalSecondaryModel])]
-    : [options.model ?? env.openAiModel];
+  // `undefined` means "whatever model this request selected". Substituting
+  // env.openAiModel here would hand llmClient an *explicit* model, which pins the
+  // call to the legacy provider and switches fallback off, silently making the
+  // user's X-AI-Model choice ineffective on every pipeline. Cross-model runs still
+  // name both vendors outright, because that mode is about a fixed pair.
+  // Cross-model names its pair outright; every other run leaves the slot unset.
+  const crossModelModels: string[] = [...new Set([options.model ?? env.openAiModel, env.dualEvalSecondaryModel])];
+  const models: (string | undefined)[] = crossModel ? crossModelModels : [options.model];
   const k = Math.max(1, options.k ?? (crossModel ? models.length : options.reliability === "verified" ? env.reliability.sampleCount : 1));
   if (k > 1 && !options.aggregate) throw new Error(`${descriptor.id}: sampling with k=${k} requires an aggregate function`);
   // Cross-model runs stay near-deterministic so disagreement is attributable to the model, not the temperature.
@@ -67,13 +73,17 @@ export async function runLlmAnalysis<A extends unknown[], T>(
   let cacheHits = 0;
 
   for (let sampleIndex = 0; sampleIndex < k; sampleIndex += 1) {
-    const model = models[sampleIndex % models.length];
+    const requestedModel = models[sampleIndex % models.length];
+    // A cache key has to name one concrete model, so resolve the ambient selection
+    // for identity only. The call below still passes `undefined`, leaving llmClient
+    // free to fail over to another provider when this one is exhausted.
+    const model = requestedModel ?? resolveChatSelection().target.id;
     const key = cacheKeyOf({ promptHash: descriptor.hash, model, temperature, inputHash, sampleIndex });
     const cached = useCache && !skipCacheRead ? await promptCache.get(key) : null;
 
     const result = await llmRateGate.run(() =>
       callValidatedLlmJsonWithTrace(descriptor.system, userPrompt, schema, descriptor.id, {
-        model,
+        model: requestedModel,
         temperature,
         prompt: identity,
         sampleIndex,
@@ -94,7 +104,7 @@ export async function runLlmAnalysis<A extends unknown[], T>(
   const agreement: AgreementSummary = {
     ...baseAgreement,
     mode: crossModel ? "cross-model" : "self-consistency",
-    models: crossModel ? models : undefined,
+    models: crossModel ? crossModelModels : undefined,
   };
   // Collapse the k per-sample traces (already recorded) into one run row carrying the agreement.
   const scope = currentTraceScope();
@@ -108,7 +118,7 @@ export async function runLlmAnalysis<A extends unknown[], T>(
     sampleTraces.reduce<number | null>((total, t) => (pick(t) === null ? total : (total ?? 0) + pick(t)!), null);
   const merged: LlmRunTrace = {
     ...sampleTraces[0],
-    model: crossModel ? models.join("+") : sampleTraces[0].model,
+    model: crossModel ? crossModelModels.join("+") : sampleTraces[0].model,
     sampleCount: k,
     cacheHit: cacheHits === k,
     promptTokens: sum((t) => t.promptTokens),
