@@ -12,7 +12,7 @@ const highlights = [
 
 export default function AuthShell() {
   return (
-    <div className="flex min-h-dvh bg-background">
+    <div className="flex h-full min-h-dvh overflow-y-auto bg-background">
       {/* brand panel — desktop only */}
       <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-primary-800 p-12 text-white lg:flex dark:bg-primary-950">
         <span aria-hidden="true" className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-primary-400/20 blur-3xl" />

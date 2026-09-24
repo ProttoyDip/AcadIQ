@@ -91,7 +91,7 @@ export default function Landing() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-dvh bg-background text-foreground">
+    <div className="min-h-dvh flex flex-col bg-background text-foreground scroll-smooth">
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-card focus:px-4 focus:py-2 focus:text-small focus:font-semibold focus:shadow-elevated"
@@ -178,7 +178,7 @@ export default function Landing() {
         )}
       </header>
 
-      <main id="main">
+      <main id="main" className="flex-1">
         {/* -------------------------------------------------------------- hero */}
         <section className="brand-wash relative overflow-hidden">
           <div

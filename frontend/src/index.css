@@ -119,8 +119,8 @@
   html,
   body,
   #root {
-    height: 100%;
-    overflow: hidden;
+    min-height: 100%;
+    overflow-x: hidden;
   }
 
   /* Headings never inherit tabular figures — only data does */
