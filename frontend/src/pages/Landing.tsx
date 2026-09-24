@@ -102,8 +102,8 @@ export default function Landing() {
       <header className="sticky top-0 z-50 border-b border-border/70 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-5 sm:px-6 lg:px-8">
           <Link to="/" className="group flex items-center gap-2.5" aria-label="AcadIQ home">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-glow transition-transform duration-200 ease-out group-hover:scale-105">
-              <GraduationCap className="h-[18px] w-[18px]" aria-hidden="true" />
+            <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-border/50 bg-[#F4F5EE] p-0.5 shadow-sm transition-transform duration-200 ease-out group-hover:scale-105">
+              <img src="/logo-icon.png" alt="AcadIQ Logo" className="h-full w-full object-contain" />
             </span>
             <span className="text-lg font-extrabold tracking-tight">AcadIQ</span>
           </Link>
@@ -480,8 +480,8 @@ export default function Landing() {
       <footer className="border-t border-border bg-card/60">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 px-5 py-10 sm:px-6 lg:flex-row lg:px-8">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <GraduationCap className="h-4 w-4" aria-hidden="true" />
+            <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-border/50 bg-[#F4F5EE] p-0.5 shadow-sm">
+              <img src="/logo-icon.png" alt="AcadIQ Logo" className="h-full w-full object-contain" />
             </span>
             <span className="font-bold tracking-tight">AcadIQ</span>
           </div>

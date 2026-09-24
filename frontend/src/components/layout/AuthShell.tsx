@@ -19,8 +19,8 @@ export default function AuthShell() {
         <span aria-hidden="true" className="pointer-events-none absolute -bottom-32 -left-20 h-80 w-80 rounded-full bg-primary-300/10 blur-3xl" />
 
         <Link to="/" className="relative flex w-fit items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
-            <GraduationCap className="h-[18px] w-[18px]" aria-hidden="true" />
+          <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-white/20 bg-[#F4F5EE] p-0.5 shadow-sm">
+            <img src="/logo-icon.png" alt="AcadIQ Logo" className="h-full w-full object-contain" />
           </span>
           <span className="text-body font-extrabold tracking-tight">AcadIQ</span>
         </Link>
@@ -53,8 +53,8 @@ export default function AuthShell() {
 
         <div className="w-full max-w-sm">
           <Link to="/" className="mb-8 flex w-fit items-center gap-2.5 lg:hidden">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-glow">
-              <GraduationCap className="h-[18px] w-[18px]" aria-hidden="true" />
+            <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-border/50 bg-[#F4F5EE] p-0.5 shadow-sm">
+              <img src="/logo-icon.png" alt="AcadIQ Logo" className="h-full w-full object-contain" />
             </span>
             <span className="text-body font-extrabold tracking-tight">AcadIQ</span>
           </Link>
