@@ -79,7 +79,7 @@ export default function MobileNav() {
               >
                 <div className="flex h-16 items-center justify-between gap-3 border-b border-border px-4">
                   <div className="flex min-w-0 items-center gap-2.5">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/50 bg-[#F4F5EE] p-0.5 shadow-sm">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/60 bg-[#F4F5EE] p-1 shadow-sm">
                       <img src="/logo-icon.png" alt="AcadIQ Logo" className="h-full w-full object-contain" />
                     </span>
                     <span className="truncate text-body font-extrabold tracking-tight">AcadIQ</span>

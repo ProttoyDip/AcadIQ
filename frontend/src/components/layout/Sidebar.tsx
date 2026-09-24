@@ -24,7 +24,7 @@ export default function Sidebar() {
     >
       {/* brand */}
       <div className="flex h-16 items-center gap-3 border-b border-border px-4">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/50 bg-[#F4F5EE] p-0.5 shadow-sm">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/60 bg-[#F4F5EE] p-1 shadow-sm">
           <img src="/logo-icon.png" alt="AcadIQ Logo" className="h-full w-full object-contain" />
         </span>
         {!sidebarCollapsed && (

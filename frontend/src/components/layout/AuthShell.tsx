@@ -18,11 +18,11 @@ export default function AuthShell() {
         <span aria-hidden="true" className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-primary-400/20 blur-3xl" />
         <span aria-hidden="true" className="pointer-events-none absolute -bottom-32 -left-20 h-80 w-80 rounded-full bg-primary-300/10 blur-3xl" />
 
-        <Link to="/" className="relative flex w-fit items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-white/20 bg-[#F4F5EE] p-0.5 shadow-sm">
+        <Link to="/" className="relative flex w-fit items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-white/20 bg-[#F4F5EE] p-1 shadow-sm">
             <img src="/logo-icon.png" alt="AcadIQ Logo" className="h-full w-full object-contain" />
           </span>
-          <span className="text-body font-extrabold tracking-tight">AcadIQ</span>
+          <span className="text-xl font-extrabold tracking-tight">AcadIQ</span>
         </Link>
 
         <motion.div variants={stagger()} initial="hidden" animate="visible" className="relative max-w-md">
@@ -52,11 +52,11 @@ export default function AuthShell() {
         </div>
 
         <div className="w-full max-w-sm">
-          <Link to="/" className="mb-8 flex w-fit items-center gap-2.5 lg:hidden">
-            <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-border/50 bg-[#F4F5EE] p-0.5 shadow-sm">
+          <Link to="/" className="mb-8 flex w-fit items-center gap-3 lg:hidden">
+            <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-border/60 bg-[#F4F5EE] p-1 shadow-sm">
               <img src="/logo-icon.png" alt="AcadIQ Logo" className="h-full w-full object-contain" />
             </span>
-            <span className="text-body font-extrabold tracking-tight">AcadIQ</span>
+            <span className="text-xl font-extrabold tracking-tight">AcadIQ</span>
           </Link>
 
           <Outlet />
