@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { ThemeToggle } from "../components/ui/ThemeToggle";
+import Footer from "../components/layout/Footer";
 import { fadeUp, stagger, inView } from "../lib/motion";
 
 const navLinks = [
@@ -477,32 +478,7 @@ export default function Landing() {
       </main>
 
       {/* ------------------------------------------------------------- footer */}
-      <footer className="border-t border-border bg-card/60">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 px-5 py-10 sm:px-6 lg:flex-row lg:px-8">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border border-border/60 bg-[#F4F5EE] p-1 shadow-sm">
-              <img src="/logo-icon.png" alt="AcadIQ Logo" className="h-full w-full object-contain" />
-            </span>
-            <span className="text-base font-bold tracking-tight">AcadIQ</span>
-          </div>
-
-          <nav aria-label="Footer" className="flex flex-wrap items-center justify-center gap-x-7 gap-y-3">
-            <Link to="/login" className="text-small text-muted-foreground transition-colors hover:text-foreground">
-              Log in
-            </Link>
-            <Link to="/register" className="text-small text-muted-foreground transition-colors hover:text-foreground">
-              Register
-            </Link>
-            <Link to="/forgot-password" className="text-small text-muted-foreground transition-colors hover:text-foreground">
-              Forgot password
-            </Link>
-          </nav>
-
-          <p className="text-center text-xs text-muted-foreground">
-            &copy; {new Date().getFullYear()} AcadIQ Academic Intelligence Platform
-          </p>
-        </div>
-      </footer>
+      <Footer variant="landing" />
     </div>
   );
 }
